@@ -1,5 +1,6 @@
 secrets.toml
 
+imgur_token.json
 
 # Created by https://www.gitignore.io/api/python
 
@@ -126,4 +127,3 @@ pip-selfcheck.json
 
 
 # End of https://www.gitignore.io/api/python
-
