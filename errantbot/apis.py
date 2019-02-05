@@ -3,16 +3,18 @@ from requests_oauthlib import OAuth2Session
 import os
 import json
 
+
 class Reddit:
     def __init__(self, secrets):
         self.secrets = secrets
 
     def authenticate(self):
-        self.reddit = praw.Reddit(client_id=self.secrets["client_id"],
-                                  client_secret=self.secrets["client_secret"],
-                                  password=self.secrets["password"],
-                                  username=self.secrets["username"],
-                                  user_agent="ErrantBot")
+        self.reddit = praw.Reddit(
+            client_id=self.secrets["client_id"],
+            client_secret=self.secrets["client_secret"],
+            password=self.secrets["password"],
+            username=self.secrets["username"],
+            user_agent="ErrantBot")
 
 
 class Imgur:
@@ -34,15 +36,17 @@ class Imgur:
         else:
             initial_session = OAuth2Session(self.client_id)
 
-            new_auth_url, state = initial_session.authorization_url(self.auth_url)
+            new_auth_url, state = initial_session.authorization_url(
+                self.auth_url)
 
             print("Please go here to authorize: " + new_auth_url)
 
             callback_url = input("Paste the full redirect URL here: ")
 
-            token = initial_session.fetch_token(self.token_url,
-                                                client_secret=self.client_secret,
-                                                authorization_response=callback_url)
+            token = initial_session.fetch_token(
+                self.token_url,
+                client_secret=self.client_secret,
+                authorization_response=callback_url)
 
             Imgur.token_saver(token)
 
@@ -51,10 +55,12 @@ class Imgur:
             "client_secret": self.client_secret
         }
 
-        self.session = OAuth2Session(self.client_id, token=token,
-                                     auto_refresh_url=self.refresh_url,
-                                     auto_refresh_kwargs=client_data,
-                                     token_updater=self.token_saver)
+        self.session = OAuth2Session(
+            self.client_id,
+            token=token,
+            auto_refresh_url=self.refresh_url,
+            auto_refresh_kwargs=client_data,
+            token_updater=self.token_saver)
 
     def token_saver(token):
         print("Refreshing!")
@@ -66,9 +72,10 @@ class Imgur:
         print(r.content)
 
     def upload_url(self, url, title, description):
-        return self.session.post("https://api.imgur.com/3/image", {
-            "type": "URL",
-            "image": url,
-            "title": title,
-            "description": description
-        })
+        return self.session.post(
+            "https://api.imgur.com/3/image", {
+                "type": "URL",
+                "image": url,
+                "title": title,
+                "description": description
+            })

@@ -5,8 +5,8 @@ import tldextract
 from urllib.parse import urlparse
 from collections import namedtuple
 
-Work = namedtuple("Work", ["title", "artist", "series", "nsfw",
-                             "image_url", "source_url"])
+Work = namedtuple(
+    "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"])
 
 
 def artstation(page_url):
@@ -40,7 +40,8 @@ def artstation(page_url):
         "(\ud83d[\u0000-\uddff])|"  # symbols & pictographs (2 of 2)
         "(\ud83d[\ude80-\udeff])|"  # transport & map symbols
         "(\ud83c[\udde0-\uddff])"  # flags (iOS)
-        "+", flags=regex.UNICODE)
+        "+",
+        flags=regex.UNICODE)
 
     clean_artist = antifun.sub("", artist).strip()
 
@@ -50,9 +51,7 @@ def artstation(page_url):
 
 
 def auto(page_url):
-    domains = {
-        "artstation": artstation
-    }
+    domains = {"artstation": artstation}
 
     no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)
 
