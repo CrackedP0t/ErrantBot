@@ -6,7 +6,8 @@ from urllib.parse import urlparse
 from collections import namedtuple
 
 Work = namedtuple(
-    "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"])
+    "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
+)
 
 
 def artstation(page_url):
@@ -41,7 +42,8 @@ def artstation(page_url):
         "(\ud83d[\ude80-\udeff])|"  # transport & map symbols
         "(\ud83c[\udde0-\uddff])"  # flags (iOS)
         "+",
-        flags=regex.UNICODE)
+        flags=regex.UNICODE,
+    )
 
     clean_artist = antifun.sub("", artist).strip()
 

@@ -2,7 +2,6 @@ import MySQLdb
 from MySQLdb import cursors
 import tomlkit
 import click
-
 from errantbot import apis, extract, helper
 
 
@@ -25,8 +24,9 @@ def connect_imgur():
     with open("secrets.toml") as secrets_file:
         secrets = tomlkit.parse(secrets_file.read())
 
-        imgur = apis.Imgur(secrets["imgur"]["client_id"],
-                           secrets["imgur"]["client_secret"])
+        imgur = apis.Imgur(
+            secrets["imgur"]["client_id"], secrets["imgur"]["client_secret"]
+        )
 
     imgur.authenticate()
 
@@ -35,7 +35,8 @@ def connect_imgur():
 
 def connect_db():
     return MySQLdb.connect(
-        user="root", passwd="", db="errant", cursorclass=cursors.DictCursor)
+        user="root", passwd="", db="errant", cursorclass=cursors.DictCursor
+    )
 
 
 @click.group()
@@ -53,9 +54,14 @@ def cli():
 def add(source_url, title, artist, series, nsfw, subreddits):
     work = extract.auto(source_url)
 
-    work = extract.Work(title or work.title, artist or work.artist, series
-                        or work.series, nsfw or work.nsfw, work.image_url,
-                        work.source_url)
+    work = extract.Work(
+        title or work.title,
+        artist or work.artist,
+        series or work.series,
+        nsfw or work.nsfw,
+        work.image_url,
+        work.source_url,
+    )
 
     sublist = subreddits.split(",")
 
@@ -65,26 +71,41 @@ def add(source_url, title, artist, series, nsfw, subreddits):
 
     if not series:
 
-        cursor.execute("""SELECT name FROM subreddits WHERE name IN ({})
-            AND tag_series = 1""".format(", ".join(
-            map(lambda sub: "'" + sub + "'", sublist))))
+        cursor.execute(
+            """SELECT name FROM subreddits WHERE name IN ({})
+            AND tag_series = 1""".format(
+                ", ".join(map(lambda sub: "'" + sub + "'", sublist))
+            )
+        )
 
         tagged_subs = cursor.fetchall()
 
         length = len(tagged_subs)
 
         if length > 0:
-            raise click.UsageError("Subreddit{} {} require{} a series".format(
-                "s" if length > 1 else "", ", ".join(
-                    map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
-                "" if length > 1 else "s"))
+            raise click.UsageError(
+                "Subreddit{} {} require{} a series".format(
+                    "s" if length > 1 else "",
+                    ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
+                    "" if length > 1 else "s",
+                )
+            )
 
     imgur = None
 
     click.echo("Saving to database... ", nl=False, err=True)
-    row_id = helper.save_post(db, work.title, work.series, work.artist,
-                              work.source_url, None, None, work.nsfw,
-                              work.image_url, sublist)
+    row_id = helper.save_post(
+        db,
+        work.title,
+        work.series,
+        work.artist,
+        work.source_url,
+        None,
+        None,
+        work.nsfw,
+        work.image_url,
+        sublist,
+    )
     click.echo("done", nl=True, err=True)
 
     click.echo("Uploading to Imgur... ", nl=False, err=True)

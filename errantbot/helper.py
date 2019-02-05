@@ -11,8 +11,10 @@ def post_to_all(db, post_id, reddit):
         INNER JOIN (posts_to_subreddits, subreddits)
         ON posts_to_subreddits.did_submit=0
         AND posts_to_subreddits.post_id=posts.id
-        AND posts_to_subreddits.subreddit_id=subreddits.id AND posts.id={}""".
-        format(post_id))
+        AND posts_to_subreddits.subreddit_id=subreddits.id AND posts.id={}""".format(
+            post_id
+        )
+    )
 
     rows = cursor.fetchall()
 
@@ -38,7 +40,9 @@ def post_to_all(db, post_id, reddit):
         cursor.execute(
             "UPDATE posts_to_subreddits SET submission_id = %s, \
                 did_submit = 1 WHERE id = %s"
-            "", (submission.id, row["id"]))
+            "",
+            (submission.id, row["id"]),
+        )
 
         db.commit()
 
@@ -46,34 +50,60 @@ def post_to_all(db, post_id, reddit):
 def upload_to_imgur(db, post_id, imgur):
     cursor = db.cursor()
 
-    cursor.execute("""SELECT title, artist, source_image_url, source_url
-        FROM posts WHERE id={}""".format(post_id))
+    cursor.execute(
+        """SELECT title, artist, source_image_url, source_url
+        FROM posts WHERE id={}""".format(
+            post_id
+        )
+    )
     row = cursor.fetchone()
 
-    resp = imgur.upload_url(row["source_image_url"],
-                            "{title} ({artist})".format(**row),
-                            "Source: {}".format(row["source_url"]))
+    resp = imgur.upload_url(
+        row["source_image_url"],
+        "{title} ({artist})".format(**row),
+        "Source: {source_url}".format(**row),
+    )
 
     resp.raise_for_status()
 
     data = resp.json()["data"]
 
-    cursor.execute("""UPDATE posts
-        SET imgur_post_url='https://imgur.com/{id}', imgur_image_url='{link}'
-        WHERE id={}""".format(post_id, **data))
+    cursor.execute(
+        """UPDATE posts SET imgur_post_url=%s, imgur_image_url=%s WHERE id=%s""",
+        ("https://imgur.com/" + data["id"], data["link"], post_id),
+    )
     db.commit()
 
 
-def save_post(db, title, series, artist, source_url, imgur_post_url,
-              imgur_image_url, nsfw, source_image_url, subreddits):
+def save_post(
+    db,
+    title,
+    series,
+    artist,
+    source_url,
+    imgur_post_url,
+    imgur_image_url,
+    nsfw,
+    source_image_url,
+    subreddits,
+):
     cursor = db.cursor()
 
     cursor.execute(
         """INSERT INTO posts (title, series, artist, source_url,
             imgur_post_url, imgur_image_url, nsfw, source_image_url)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s);""",
-        (title, series, artist, source_url, imgur_post_url, imgur_image_url,
-         nsfw, source_image_url))
+        (
+            title,
+            series,
+            artist,
+            source_url,
+            imgur_post_url,
+            imgur_image_url,
+            nsfw,
+            source_image_url,
+        ),
+    )
     db.commit()
 
     cursor.execute("SELECT LAST_INSERT_ID()")
@@ -91,7 +121,8 @@ def add_subreddit(db, name, tag_series, flair_id):
         """INSERT INTO subreddits (name, tag_series, flair_id)
         VALUES (%s, %s, %s)
         ON DUPLICATE KEY UPDATE tag_series=%s, flair_id=%s""",
-        (name, tag_series, flair_id, tag_series, flair_id))
+        (name, tag_series, flair_id, tag_series, flair_id),
+    )
     db.commit()
 
 
@@ -104,8 +135,8 @@ def add_post_to_subreddits(db, post_id, subreddit_names):
         """INSERT INTO posts_to_subreddits
         (post_id, subreddit_id, submission_id, did_submit)
         SELECT %s, id, NULL, 0 FROM subreddits WHERE name IN ({})""",
-        (post_id, ", ".join(
-            map(lambda name: "'" + name + "'", subreddit_names))))
+        (post_id, ", ".join(map(lambda name: "'" + name + "'", subreddit_names))),
+    )
     db.commit()
 
 
@@ -115,7 +146,8 @@ def check_subreddits(db, subreddit_names):
     cursor.execute(
         """WITH prov (name) AS ( VALUES %s )
         SELECT name FROM prov EXCEPT select name from subreddits""",
-        (",".join(map(lambda name: "('" + name + "')", subreddit_names)), ))
+        (",".join(map(lambda name: "('" + name + "')", subreddit_names)),),
+    )
 
     badsubs = cursor.fetchall()
 
@@ -124,6 +156,9 @@ def check_subreddits(db, subreddit_names):
     if n_bad > 0:
         raise click.UsageError(
             "Subreddit{} {} {} unknown. Use 'add-sub' to register {}.".format(
-                "s" if n_bad > 1 else "", ", ".join(
-                    map(lambda sub: "'" + sub["name"] + "'", badsubs)),
-                "are" if n_bad > 1 else "is", "them" if n_bad > 1 else "it"))
+                "s" if n_bad > 1 else "",
+                ", ".join(map(lambda sub: "'" + sub["name"] + "'", badsubs)),
+                "are" if n_bad > 1 else "is",
+                "them" if n_bad > 1 else "it",
+            )
+        )
