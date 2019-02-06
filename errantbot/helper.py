@@ -11,9 +11,8 @@ def post_to_all(db, post_id, reddit):
         INNER JOIN (posts_to_subreddits, subreddits)
         ON posts_to_subreddits.did_submit=0
         AND posts_to_subreddits.post_id=posts.id
-        AND posts_to_subreddits.subreddit_id=subreddits.id AND posts.id={}""".format(
-            post_id
-        )
+        AND posts_to_subreddits.subreddit_id=subreddits.id AND posts.id=%s""",
+        (post_id,),
     )
 
     rows = cursor.fetchall()
@@ -52,9 +51,8 @@ def upload_to_imgur(db, post_id, imgur):
 
     cursor.execute(
         """SELECT title, artist, source_image_url, source_url
-        FROM posts WHERE id={}""".format(
-            post_id
-        )
+        FROM posts WHERE id=%s""",
+        (post_id,),
     )
     row = cursor.fetchone()
 
@@ -127,7 +125,7 @@ def add_subreddit(db, name, tag_series, flair_id):
 
 
 def add_post_to_subreddits(db, post_id, subreddit_names):
-    check_subreddits(db, subreddit_names)
+    subreddits_exist(db, subreddit_names)
 
     cursor = db.cursor()
 
@@ -140,7 +138,7 @@ def add_post_to_subreddits(db, post_id, subreddit_names):
     db.commit()
 
 
-def check_subreddits(db, subreddit_names):
+def subreddits_exist(db, subreddit_names):
     cursor = db.cursor()
 
     cursor.execute(

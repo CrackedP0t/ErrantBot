@@ -72,10 +72,9 @@ def add(source_url, title, artist, series, nsfw, subreddits):
     if not series:
 
         cursor.execute(
-            """SELECT name FROM subreddits WHERE name IN ({})
-            AND tag_series = 1""".format(
-                ", ".join(map(lambda sub: "'" + sub + "'", sublist))
-            )
+            """SELECT name FROM subreddits WHERE name IN %s
+            AND tag_series = 1""",
+            (sublist,),
         )
 
         tagged_subs = cursor.fetchall()
