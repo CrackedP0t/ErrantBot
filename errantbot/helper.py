@@ -8,8 +8,7 @@ def post_to_all(db, post_id, reddit):
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
         source_image_url, flair_id, tag_series, name, rehost,
         posts_to_subreddits.id FROM posts
-        INNER JOIN (posts_to_subreddits, subreddits)
-        ON posts_to_subreddits.did_submit=0
+        INNER JOIN (posts_to_subreddits, subreddits) ON posts_to_subreddits.did_submit=0
         AND posts_to_subreddits.post_id=posts.id
         AND posts_to_subreddits.subreddit_id=subreddits.id AND posts.id=%s""",
         (post_id,),
@@ -132,7 +131,7 @@ def add_post_to_subreddits(db, post_id, subreddit_names):
     cursor.execute(
         """INSERT INTO posts_to_subreddits
         (post_id, subreddit_id, submission_id, did_submit)
-        SELECT %s, id, NULL, 0 FROM subreddits WHERE name IN ({})""",
+        SELECT %s, id, NULL, 0 FROM subreddits WHERE name IN %s""",
         (post_id, ", ".join(map(lambda name: "'" + name + "'", subreddit_names))),
     )
     db.commit()
@@ -142,9 +141,9 @@ def subreddits_exist(db, subreddit_names):
     cursor = db.cursor()
 
     cursor.execute(
-        """WITH prov (name) AS ( VALUES %s )
+        """WITH prov (name) AS ( VALUES (%s) )
         SELECT name FROM prov EXCEPT select name from subreddits""",
-        (",".join(map(lambda name: "('" + name + "')", subreddit_names)),),
+        (subreddit_names,),
     )
 
     badsubs = cursor.fetchall()
