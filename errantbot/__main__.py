@@ -1,11 +1,13 @@
-import MySQLdb
-from MySQLdb import cursors
 import tomlkit
 import click
 from errantbot import apis, extract, helper
+import psycopg2
+import psycopg2.extras
 
 
 def connect_reddit():
+    click.echo("Connecting to Reddit...")
+
     reddit = None
 
     with open("secrets.toml") as secrets_file:
@@ -19,6 +21,7 @@ def connect_reddit():
 
 
 def connect_imgur():
+    click.echo("Connecting to Imgur...")
     imgur = None
 
     with open("secrets.toml") as secrets_file:
@@ -34,9 +37,19 @@ def connect_imgur():
 
 
 def connect_db():
-    return MySQLdb.connect(
-        user="root", passwd="", db="errant", cursorclass=cursors.DictCursor
-    )
+    click.echo("Connecting to database...")
+
+    db = None
+    with open("secrets.toml") as secrets_file:
+        secrets = tomlkit.parse(secrets_file.read())["database"]
+
+        db = psycopg2.connect(
+            user=secrets["user"],
+            password=secrets["password"],
+            dbname=secrets["name"],
+            cursor_factory=psycopg2.extras.DictCursor,
+        )
+    return db
 
 
 @click.group()
@@ -45,13 +58,13 @@ def cli():
 
 
 @cli.command()
+@click.argument("source-url", required=True)
+@click.argument("subreddits", nargs=-1)
 @click.option("--title", "-t")
-@click.argument("source-url", nargs=1)
 @click.option("--artist", "-a")
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw", default=None)
-@click.option("--subreddits", "-r", default="")
-def add(source_url, title, artist, series, nsfw, subreddits):
+def add(source_url, subreddits, title, artist, series, nsfw):
     work = extract.auto(source_url)
 
     work = extract.Work(
@@ -63,8 +76,7 @@ def add(source_url, title, artist, series, nsfw, subreddits):
         work.source_url,
     )
 
-    sublist = subreddits.split(",")
-
+    subs_to_tags = helper.parse_subreddits(subreddits)
     db = connect_db()
 
     cursor = db.cursor()
@@ -73,8 +85,8 @@ def add(source_url, title, artist, series, nsfw, subreddits):
 
         cursor.execute(
             """SELECT name FROM subreddits WHERE name IN %s
-            AND tag_series = 1""",
-            (sublist,),
+            AND tag_series = true""",
+            (tuple(map(lambda sub: sub[0], subs_to_tags)),),
         )
 
         tagged_subs = cursor.fetchall()
@@ -93,7 +105,7 @@ def add(source_url, title, artist, series, nsfw, subreddits):
     imgur = None
 
     click.echo("Saving to database... ", nl=False, err=True)
-    row_id = helper.save_post(
+    row_id = helper.save_work(
         db,
         work.title,
         work.series,
@@ -103,7 +115,7 @@ def add(source_url, title, artist, series, nsfw, subreddits):
         None,
         work.nsfw,
         work.image_url,
-        sublist,
+        subs_to_tags,
     )
     click.echo("done", nl=True, err=True)
 
@@ -112,10 +124,9 @@ def add(source_url, title, artist, series, nsfw, subreddits):
     helper.upload_to_imgur(db, row_id, imgur)
     click.echo("done", nl=True, err=True)
 
-    click.echo("Posting to Reddit... ", nl=False, err=True)
-    reddit = connect_reddit()
-    helper.post_to_all(db, row_id, reddit)
-    click.echo("done", nl=True, err=True)
+    if len(subreddits) > 0:
+        reddit = connect_reddit()
+        helper.post_work_to_all(db, row_id, reddit)
 
 
 @cli.command()
@@ -129,22 +140,24 @@ def add_sub(name, tag_series, flair_id):
 
 
 @cli.command()
-@click.argument("post-id", type=int)
-@click.argument("subreddits")
-def crosspost(post_id, subreddits):
+@click.argument("work-id", type=int)
+@click.argument("subreddits", nargs=-1)
+def crosspost(work_id, subreddits):
     db = connect_db()
 
-    helper.add_post_to_subreddits(db, post_id, subreddits)
+    subs_to_tags = helper.parse_subreddits(subreddits)
 
-    helper.post_to_all(db, post_id, connect_reddit())
+    helper.add_work_to_subreddits(db, work_id, subs_to_tags)
+
+    helper.post_work_to_all(db, work_id, connect_reddit())
 
 
 @cli.command()
-@click.argument("post-id", type=int)
-def retry(post_id):
+@click.argument("work-id", type=int)
+def retry(work_id):
     db = connect_db()
 
-    helper.post_to_all(db, post_id, connect_reddit())
+    helper.post_work_to_all(db, work_id, connect_reddit())
 
 
 @cli.command()

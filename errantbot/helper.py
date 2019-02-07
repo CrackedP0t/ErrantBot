@@ -1,17 +1,32 @@
 import click
+from psycopg2.extensions import adapt, register_adapter, AsIs
 
 
-def post_to_all(db, post_id, reddit):
+def escape_values(db, seq):
+    return (b",".join(map(db.literal, seq))).decode()
+
+
+def parse_subreddits(sub_names):
+    def splitter(name):
+        pair = name.split("#")
+        return (pair[0], pair[1] if len(pair) == 2 else None)
+
+    subs_to_tags = tuple(map(splitter, sub_names))
+
+    return subs_to_tags
+
+
+def post_work_to_all(db, work_id, reddit):
     cursor = db.cursor()
 
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
-        source_image_url, flair_id, tag_series, name, rehost,
-        posts_to_subreddits.id FROM posts
-        INNER JOIN (posts_to_subreddits, subreddits) ON posts_to_subreddits.did_submit=0
-        AND posts_to_subreddits.post_id=posts.id
-        AND posts_to_subreddits.subreddit_id=subreddits.id AND posts.id=%s""",
-        (post_id,),
+        source_image_url, flair_id, tag_series, name, rehost, custom_tag,
+        submissions.id FROM works
+        INNER JOIN submissions ON submissions.reddit_id is NULL
+        AND submissions.work_id = works.id INNER JOIN subreddits
+        ON submissions.subreddit_id = subreddits.id AND works.id = %s""",
+        (work_id,),
     )
 
     rows = cursor.fetchall()
@@ -19,12 +34,11 @@ def post_to_all(db, post_id, reddit):
     for row in rows:
         sub = reddit.subreddit(row["name"])
 
-        title = row["title"] + " "
-
-        if row["tag_series"]:
-            title += "[" + row["series"] + "] "
-
-        title += "(" + row["artist"] + ")"
+        title = "{title}{series_tag} ({artist}){tag}".format(
+            series_tag=" [" + row["tag_series"] + "]" if row["tag_series"] else "",
+            tag=" [" + row["custom_tag"] + "]" if row["custom_tag"] else "",
+            **row
+        )
 
         url = row["imgur_image_url" if row["rehost"] else "source_image_url"]
 
@@ -36,22 +50,20 @@ def post_to_all(db, post_id, reddit):
         submission.reply("[Source]({})".format(row["source_url"]))
 
         cursor.execute(
-            "UPDATE posts_to_subreddits SET submission_id = %s, \
-                did_submit = 1 WHERE id = %s"
-            "",
+            "UPDATE submissions SET reddit_id = %s WHERE id = %s" "",
             (submission.id, row["id"]),
         )
 
         db.commit()
 
 
-def upload_to_imgur(db, post_id, imgur):
+def upload_to_imgur(db, work_id, imgur):
     cursor = db.cursor()
 
     cursor.execute(
         """SELECT title, artist, source_image_url, source_url
-        FROM posts WHERE id=%s""",
-        (post_id,),
+        FROM works WHERE id=%s""",
+        (work_id,),
     )
     row = cursor.fetchone()
 
@@ -66,36 +78,36 @@ def upload_to_imgur(db, post_id, imgur):
     data = resp.json()["data"]
 
     cursor.execute(
-        """UPDATE posts SET imgur_post_url=%s, imgur_image_url=%s WHERE id=%s""",
-        ("https://imgur.com/" + data["id"], data["link"], post_id),
+        """UPDATE works SET imgur_id=%s, imgur_image_url=%s WHERE id=%s""",
+        (data["id"], data["link"], work_id),
     )
     db.commit()
 
 
-def save_post(
+def save_work(
     db,
     title,
     series,
     artist,
     source_url,
-    imgur_post_url,
+    imgur_id,
     imgur_image_url,
     nsfw,
     source_image_url,
-    subreddits,
+    subs_to_tags,
 ):
     cursor = db.cursor()
 
     cursor.execute(
-        """INSERT INTO posts (title, series, artist, source_url,
-            imgur_post_url, imgur_image_url, nsfw, source_image_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);""",
+        """INSERT INTO works (title, series, artist, source_url,
+            imgur_id, imgur_image_url, nsfw, source_image_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;""",
         (
             title,
             series,
             artist,
             source_url,
-            imgur_post_url,
+            imgur_id,
             imgur_image_url,
             nsfw,
             source_image_url,
@@ -103,12 +115,11 @@ def save_post(
     )
     db.commit()
 
-    cursor.execute("SELECT LAST_INSERT_ID()")
-    post_id = cursor.fetchall()[0]["LAST_INSERT_ID()"]
+    work_id = cursor.fetchone()[0]
 
-    add_post_to_subreddits(db, post_id, subreddits)
+    add_work_to_subreddits(db, work_id, subs_to_tags)
 
-    return post_id
+    return work_id
 
 
 def add_subreddit(db, name, tag_series, flair_id):
@@ -117,22 +128,35 @@ def add_subreddit(db, name, tag_series, flair_id):
     cursor.execute(
         """INSERT INTO subreddits (name, tag_series, flair_id)
         VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE tag_series=%s, flair_id=%s""",
+        ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s""",
         (name, tag_series, flair_id, tag_series, flair_id),
     )
     db.commit()
 
 
-def add_post_to_subreddits(db, post_id, subreddit_names):
-    subreddits_exist(db, subreddit_names)
+def add_work_to_subreddits(db, work_id, subs_to_tags):
+    subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
+
+    class SubsToTags:
+        def __init__(self, s2t):
+            self.s2t = s2t
+
+    def adapt_substotags(obj):
+        return AsIs(
+            ",".join(map(lambda pair: adapt(pair).getquoted().decode(), obj.s2t))
+        )
+
+    register_adapter(SubsToTags, adapt_substotags)
 
     cursor = db.cursor()
 
     cursor.execute(
-        """INSERT INTO posts_to_subreddits
-        (post_id, subreddit_id, submission_id, did_submit)
-        SELECT %s, id, NULL, 0 FROM subreddits WHERE name IN %s""",
-        (post_id, ", ".join(map(lambda name: "'" + name + "'", subreddit_names))),
+        """INSERT INTO submissions
+        (work_id, subreddit_id, custom_tag)
+        SELECT %s, id, tag FROM subreddits INNER JOIN (VALUES %s) AS tags (subname, tag)
+        ON subreddits.name = tags.subname
+        ON CONFLICT ON CONSTRAINT submissions_work_id_subreddit_id_key DO NOTHING""",
+        (work_id, SubsToTags(subs_to_tags)),
     )
     db.commit()
 
@@ -141,7 +165,7 @@ def subreddits_exist(db, subreddit_names):
     cursor = db.cursor()
 
     cursor.execute(
-        """WITH prov (name) AS ( VALUES (%s) )
+        """WITH prov (name) AS ( VALUES %s )
         SELECT name FROM prov EXCEPT select name from subreddits""",
         (subreddit_names,),
     )

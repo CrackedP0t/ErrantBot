@@ -1,4 +1,3 @@
-from bs4 import BeautifulSoup
 import regex
 import requests
 import tldextract
@@ -11,13 +10,6 @@ Work = namedtuple(
 
 
 def artstation(page_url):
-    r = requests.get(page_url)
-
-    soup = BeautifulSoup(r.content, "html.parser")
-
-    meta_image = soup.head.find("meta", property="og:image")
-    image_url = meta_image["content"]
-
     parsed = urlparse(page_url)
 
     ident = regex.search(r"([^/]*)\/?$", parsed.path)[0]

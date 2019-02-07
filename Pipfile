@@ -11,8 +11,8 @@ requests-oauthlib = "*"
 "beautifulsoup4" = "*"
 regex = "*"
 tldextract = "*"
-mysqlclient = "*"
 click = "*"
+psycopg2-binary = "*"
 
 [dev-packages]
 
