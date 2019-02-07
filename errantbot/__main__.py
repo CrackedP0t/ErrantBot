@@ -139,13 +139,74 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 
 
 @cli.command()
+@click.argument("title")
+@click.argument("artist")
+@click.argument("source-url")
+@click.argument("source-image-url")
+@click.argument("subreddits", nargs=-1, type=DownCase)
+@click.option("--series", "-s")
+@click.option("--nsfw/--sfw")
+def add_custom(title, artist, source_url, source_image_url, subreddits, series, nsfw):
+    subs_to_tags = helper.parse_subreddits(subreddits)
+    db = connect_db()
+
+    cursor = db.cursor()
+
+    if not series:
+
+        cursor.execute(
+            """SELECT name FROM subreddits WHERE name IN %s
+            AND tag_series = true""",
+            (tuple(map(lambda sub: sub[0], subs_to_tags)),),
+        )
+
+        tagged_subs = cursor.fetchall()
+
+        length = len(tagged_subs)
+
+        if length > 0:
+            raise click.ClickException(
+                "Subreddit{} {} require{} a series".format(
+                    "s" if length > 1 else "",
+                    ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
+                    "" if length > 1 else "s",
+                )
+            )
+
+    imgur = None
+
+    click.echo("Saving to database... ")
+    row_id = helper.save_work(
+        db,
+        title,
+        series,
+        artist,
+        source_url,
+        None,
+        None,
+        nsfw,
+        source_image_url,
+        subs_to_tags,
+    )
+
+    click.echo("Uploading to Imgur... ")
+    imgur = connect_imgur()
+    helper.upload_to_imgur(db, row_id, imgur)
+
+    if len(subreddits) > 0:
+        reddit = connect_reddit()
+        helper.post_work_to_all(db, row_id, reddit)
+
+
+@cli.command()
 @click.argument("name", type=DownCase)
 @click.option("--tag-series", "-t", is_flag=True)
 @click.option("--flair-id", "-f")
-def add_sub(name, tag_series, flair_id):
+@click.option("--rehost", "-r", is_flag=True)
+def add_sub(name, tag_series, flair_id, rehost):
     db = connect_db()
 
-    helper.add_subreddit(db, name, tag_series, flair_id)
+    helper.add_subreddit(db, name, tag_series, flair_id, not rehost)
 
 
 @cli.command()

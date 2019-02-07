@@ -34,8 +34,8 @@ def post_work_to_all(db, work_id, reddit):
     for row in rows:
         sub = reddit.subreddit(row["name"])
 
-        title = "{title}{series_tag} ({artist}){tag}".format(
-            series_tag=" [" + row["tag_series"] + "]" if row["tag_series"] else "",
+        title = "{title} ({artist}){series_tag}{tag}".format(
+            series_tag=" [" + row["series"] + "]" if row["tag_series"] else "",
             tag=" [" + row["custom_tag"] + "]" if row["custom_tag"] else "",
             **row
         )
@@ -124,14 +124,14 @@ def save_work(
     return work_id
 
 
-def add_subreddit(db, name, tag_series, flair_id):
+def add_subreddit(db, name, tag_series, flair_id, rehost):
     cursor = db.cursor()
 
     cursor.execute(
-        """INSERT INTO subreddits (name, tag_series, flair_id)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s""",
-        (name, tag_series, flair_id, tag_series, flair_id),
+        """INSERT INTO subreddits (name, tag_series, flair_id, rehost)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s, rehost = %s""",
+        (name, tag_series, flair_id, rehost, tag_series, flair_id, rehost),
     )
     db.commit()
 
