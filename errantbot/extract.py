@@ -1,8 +1,10 @@
 import regex
 import requests
 import tldextract
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from collections import namedtuple
+from pixivpy3 import AppPixivAPI
+import tomlkit
 
 Work = namedtuple(
     "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
@@ -44,8 +46,34 @@ def artstation(page_url):
     return work
 
 
+def pixiv(page_url):
+    parsed = urlparse(page_url)
+    query = parse_qs(parsed.query)
+
+    id = int(query["illust_id"][0])
+
+    api = AppPixivAPI()
+
+    with open("secrets.toml") as secrets_file:
+        secrets = tomlkit.parse(secrets_file.read())["pixiv"]
+        api.login(secrets["username"], secrets["password"])
+
+    data = api.illust_detail(id)["illust"]
+
+    work = Work(
+        data["title"],
+        data["user"]["name"],
+        data["series"],
+        data["x_restrict"] > 0,
+        data["meta_single_page"]["original_image_url"],
+        page_url,
+    )
+
+    return work
+
+
 def auto(page_url):
-    domains = {"artstation": artstation}
+    domains = {"artstation": artstation, "pixiv": pixiv}
 
     no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)
 

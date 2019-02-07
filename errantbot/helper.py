@@ -96,6 +96,8 @@ def save_work(
     source_image_url,
     subs_to_tags,
 ):
+    subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
+
     cursor = db.cursor()
 
     cursor.execute(
@@ -175,7 +177,7 @@ def subreddits_exist(db, subreddit_names):
     n_bad = len(badsubs)
 
     if n_bad > 0:
-        raise click.UsageError(
+        raise click.ClickException(
             "Subreddit{} {} {} unknown. Use 'add-sub' to register {}.".format(
                 "s" if n_bad > 1 else "",
                 ", ".join(map(lambda sub: "'" + sub["name"] + "'", badsubs)),

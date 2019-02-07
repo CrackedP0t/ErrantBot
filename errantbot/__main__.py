@@ -1,8 +1,21 @@
 import tomlkit
 import click
 from errantbot import apis, extract, helper
+from click.types import StringParamType
 import psycopg2
 import psycopg2.extras
+
+
+class DownCaseType(click.ParamType):
+    name = "case-insensitive text"
+
+    def convert(self, value, param, ctx):
+        s = StringParamType.convert(self, value, param, ctx)
+
+        return s.lower()
+
+
+DownCase = DownCaseType()
 
 
 def connect_reddit():
@@ -25,11 +38,9 @@ def connect_imgur():
     imgur = None
 
     with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())
+        secrets = tomlkit.parse(secrets_file.read())["imgur"]
 
-        imgur = apis.Imgur(
-            secrets["imgur"]["client_id"], secrets["imgur"]["client_secret"]
-        )
+        imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
 
     imgur.authenticate()
 
@@ -59,7 +70,7 @@ def cli():
 
 @cli.command()
 @click.argument("source-url", required=True)
-@click.argument("subreddits", nargs=-1)
+@click.argument("subreddits", nargs=-1, type=DownCase)
 @click.option("--title", "-t")
 @click.option("--artist", "-a")
 @click.option("--series", "-s")
@@ -94,7 +105,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         length = len(tagged_subs)
 
         if length > 0:
-            raise click.UsageError(
+            raise click.ClickException(
                 "Subreddit{} {} require{} a series".format(
                     "s" if length > 1 else "",
                     ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
@@ -104,7 +115,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 
     imgur = None
 
-    click.echo("Saving to database... ", nl=False, err=True)
+    click.echo("Saving to database... ")
     row_id = helper.save_work(
         db,
         work.title,
@@ -117,12 +128,10 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         work.image_url,
         subs_to_tags,
     )
-    click.echo("done", nl=True, err=True)
 
-    click.echo("Uploading to Imgur... ", nl=False, err=True)
+    click.echo("Uploading to Imgur... ")
     imgur = connect_imgur()
     helper.upload_to_imgur(db, row_id, imgur)
-    click.echo("done", nl=True, err=True)
 
     if len(subreddits) > 0:
         reddit = connect_reddit()
@@ -130,7 +139,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 
 
 @cli.command()
-@click.argument("name")
+@click.argument("name", type=DownCase)
 @click.option("--tag-series", "-t", is_flag=True)
 @click.option("--flair-id", "-f")
 def add_sub(name, tag_series, flair_id):
@@ -141,7 +150,7 @@ def add_sub(name, tag_series, flair_id):
 
 @cli.command()
 @click.argument("work-id", type=int)
-@click.argument("subreddits", nargs=-1)
+@click.argument("subreddits", nargs=-1, type=DownCase)
 def crosspost(work_id, subreddits):
     db = connect_db()
 
@@ -161,7 +170,7 @@ def retry(work_id):
 
 
 @cli.command()
-@click.argument("subreddit-name")
+@click.argument("subreddit-name", type=DownCase)
 def list_flairs(subreddit_name):
     reddit = connect_reddit()
 
@@ -170,6 +179,15 @@ def list_flairs(subreddit_name):
     for flair in sub.flair.link_templates:
         if not flair["mod_only"]:
             click.echo("{text}:\t{id}".format(**flair))
+
+
+@cli.command("extract")
+@click.argument("url")
+def _extract(url):
+    work = extract.auto(url)
+
+    for field in work._fields:
+        click.echo("{}\t{}".format(field, getattr(work, field)))
 
 
 if __name__ == "__main__":

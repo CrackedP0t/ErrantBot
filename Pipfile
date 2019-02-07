@@ -13,6 +13,7 @@ regex = "*"
 tldextract = "*"
 click = "*"
 psycopg2-binary = "*"
+pixivpy = "*"
 
 [dev-packages]
 
