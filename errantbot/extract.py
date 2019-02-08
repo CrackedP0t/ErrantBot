@@ -1,7 +1,8 @@
 import regex
 import requests
 import tldextract
-from urllib.parse import urlparse, parse_qs
+from pprint import pprint
+from urllib.parse import urlparse, parse_qs, quote
 from collections import namedtuple
 from pixivpy3 import AppPixivAPI
 import tomlkit
@@ -96,11 +97,33 @@ def hentai_foundry(page_url):
     return Work(title, artist, series, nsfw, image_url, page_url)
 
 
+def deviantart(page_url):
+    oe_req = requests.get(
+        "https://backend.deviantart.com/oembed?url={}".format(quote(page_url))
+    )
+
+    oe_req.raise_for_status()
+
+    data = oe_req.json()
+
+    fullsize = regex.compile(".*?\\.jpg")
+
+    return Work(
+        data["title"],
+        data["author_name"],
+        None,
+        data["safety"] != "nonadult",
+        fullsize.match(data["url"])[0],
+        page_url,
+    )
+
+
 def auto(page_url):
     domains = {
         "artstation": artstation,
         "pixiv": pixiv,
         "hentai-foundry": hentai_foundry,
+        "deviantart": deviantart,
     }
 
     no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)

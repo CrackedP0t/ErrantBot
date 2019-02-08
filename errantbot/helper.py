@@ -19,7 +19,7 @@ def parse_subreddits(sub_names):
 
 
 def connect_imgur():
-    click.echo("Connecting to Imgur...")
+    click.echo("Connecting to Imgur...", err=True)
     imgur = None
 
     with open("secrets.toml") as secrets_file:
@@ -33,7 +33,7 @@ def connect_imgur():
 
 
 def connect_reddit():
-    click.echo("Connecting to Reddit...")
+    click.echo("Connecting to Reddit...", err=True)
 
     reddit = None
 
@@ -93,7 +93,7 @@ def post_to_all_subreddits(db, work_id):
 def upload_to_imgur(db, work_id):
     imgur = connect_imgur()
 
-    click.echo("Uploading to Imgur...")
+    click.echo("Uploading to Imgur...", err="True")
 
     cursor = db.cursor()
 
@@ -133,7 +133,7 @@ def save_work(
     source_image_url,
     subs_to_tags,
 ):
-    click.echo("Saving to database... ")
+    click.echo("Saving to database...", err=True)
 
     subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
 

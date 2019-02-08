@@ -19,7 +19,7 @@ DownCase = DownCaseType()
 
 
 def connect_db():
-    click.echo("Connecting to database...")
+    click.echo("Connecting to database...", err=True)
 
     db = None
     with open("secrets.toml") as secrets_file:
@@ -64,7 +64,6 @@ def add(source_url, subreddits, title, artist, series, nsfw):
     if not series:
         helper.check_series(db, subs_to_tags)
 
-    click.echo("Saving to database... ")
     row_id = helper.save_work(
         db,
         work.title,
