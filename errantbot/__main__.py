@@ -1,6 +1,6 @@
 import tomlkit
 import click
-from errantbot import apis, extract, helper
+from errantbot import extract, helper
 from click.types import StringParamType
 import psycopg2
 import psycopg2.extras
@@ -61,28 +61,8 @@ def add(source_url, subreddits, title, artist, series, nsfw):
     subs_to_tags = helper.parse_subreddits(subreddits)
     db = connect_db()
 
-    cursor = db.cursor()
-
     if not series:
-
-        cursor.execute(
-            """SELECT name FROM subreddits WHERE name IN %s
-            AND tag_series = true""",
-            (tuple(map(lambda sub: sub[0], subs_to_tags)),),
-        )
-
-        tagged_subs = cursor.fetchall()
-
-        length = len(tagged_subs)
-
-        if length > 0:
-            raise click.ClickException(
-                "Subreddit{} {} require{} a series".format(
-                    "s" if length > 1 else "",
-                    ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
-                    "" if length > 1 else "s",
-                )
-            )
+        helper.check_series(db, subs_to_tags)
 
     click.echo("Saving to database... ")
     row_id = helper.save_work(
@@ -116,32 +96,9 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
     subs_to_tags = helper.parse_subreddits(subreddits)
     db = connect_db()
 
-    cursor = db.cursor()
-
     if not series:
+        helper.check_series(subs_to_tags)
 
-        cursor.execute(
-            """SELECT name FROM subreddits WHERE name IN %s
-            AND tag_series = true""",
-            (tuple(map(lambda sub: sub[0], subs_to_tags)),),
-        )
-
-        tagged_subs = cursor.fetchall()
-
-        length = len(tagged_subs)
-
-        if length > 0:
-            raise click.ClickException(
-                "Subreddit{} {} require{} a series".format(
-                    "s" if length > 1 else "",
-                    ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
-                    "" if length > 1 else "s",
-                )
-            )
-
-    imgur = None
-
-    click.echo("Saving to database... ")
     work_id = helper.save_work(
         db,
         title,
@@ -182,7 +139,7 @@ def crosspost(work_id, subreddits):
 
     helper.add_work_to_subreddits(db, work_id, subs_to_tags)
 
-    helper.post_work_to_all(db, work_id, connect_reddit())
+    helper.post_work_to_all(db, work_id)
 
 
 @cli.command()
@@ -190,7 +147,7 @@ def crosspost(work_id, subreddits):
 def retry_post(work_id):
     db = connect_db()
 
-    helper.post_work_to_all(db, work_id, connect_reddit())
+    helper.post_work_to_all(db, work_id)
 
 
 @cli.command()
@@ -198,14 +155,13 @@ def retry_post(work_id):
 def retry_upload(work_id):
     db = connect_db()
 
-    imgur = connect_imgur()
-    helper.upload_to_imgur(db, work_id, imgur)
+    helper.upload_to_imgur(db, work_id)
 
 
 @cli.command()
 @click.argument("subreddit-name", type=DownCase)
 def list_flairs(subreddit_name):
-    reddit = connect_reddit()
+    reddit = helper.connect_reddit()
 
     sub = reddit.subreddit(subreddit_name)
 

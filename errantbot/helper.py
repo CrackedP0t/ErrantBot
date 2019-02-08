@@ -133,6 +133,8 @@ def save_work(
     source_image_url,
     subs_to_tags,
 ):
+    click.echo("Saving to database... ")
+
     subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
 
     cursor = db.cursor()
@@ -220,5 +222,28 @@ def subreddits_exist(db, subreddit_names):
                 ", ".join(map(lambda sub: "'" + sub["name"] + "'", badsubs)),
                 "are" if n_bad > 1 else "is",
                 "them" if n_bad > 1 else "it",
+            )
+        )
+
+
+def check_series(db, subs_to_tags):
+    cursor = db.cursor()
+
+    cursor.execute(
+        """SELECT name FROM subreddits WHERE name IN %s
+            AND tag_series = true""",
+        (tuple(map(lambda sub: sub[0], subs_to_tags)),),
+    )
+
+    tagged_subs = cursor.fetchall()
+
+    length = len(tagged_subs)
+
+    if length > 0:
+        raise click.ClickException(
+            "Subreddit{} {} require{} a series".format(
+                "s" if length > 1 else "",
+                ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
+                "" if length > 1 else "s",
             )
         )
