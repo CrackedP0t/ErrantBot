@@ -58,7 +58,7 @@ def post_to_all_subreddits(db, work_id):
         source_image_url, flair_id, tag_series, name, rehost, custom_tag,
         submissions.id,
         (select now() - MAX(submitted_on) from submissions where
-        subreddit_id = subreddits.id) time_since, FROM works
+        subreddit_id = subreddits.id) time_since FROM works
         INNER JOIN submissions
         ON submissions.reddit_id is NULL AND submissions.work_id = works.id
         INNER JOIN subreddits
@@ -71,9 +71,11 @@ def post_to_all_subreddits(db, work_id):
     for row in rows:
         since = row["time_since"]
         if since < timedelta(days=1):
+            wait = timedelta(days=1) - since
+            wait = timedelta(wait.days, wait.seconds)
             click.echo(
                 "Submitted to '{}' less than one day ago; you can try again in {}".format(
-                    row["name"], since
+                    row["name"], wait
                 )
             )
 
