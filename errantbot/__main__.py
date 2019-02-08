@@ -1,6 +1,5 @@
 import tomlkit
 import click
-from click import echo
 from errantbot import extract, helper
 from click.types import StringParamType
 import psycopg2
@@ -215,7 +214,7 @@ def list_subs(names):
         map(lambda col: col[0], cursor.fetchall()), ("post_count", "last_post")
     )
 
-    print(tabulate(rows, headers=columns))
+    click.echo(tabulate(rows, headers=columns))
 
 
 if __name__ == "__main__":
