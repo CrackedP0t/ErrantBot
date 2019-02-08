@@ -47,7 +47,7 @@ def connect_reddit():
     return reddit.reddit
 
 
-def post_work_to_all(db, work_id):
+def post_to_all_subreddits(db, work_id):
     reddit = connect_reddit()
 
     cursor = db.cursor()

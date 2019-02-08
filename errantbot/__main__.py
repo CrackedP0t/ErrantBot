@@ -101,7 +101,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
     helper.upload_to_imgur(db, row_id)
 
     if len(subreddits) > 0:
-        helper.post_work_to_all(db, row_id)
+        helper.post_to_all_subreddits(db, row_id)
 
 
 @cli.command()
@@ -155,12 +155,10 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
         subs_to_tags,
     )
 
-    imgur = connect_imgur()
-    helper.upload_to_imgur(db, work_id, imgur)
+    helper.upload_to_imgur(db, work_id)
 
     if len(subreddits) > 0:
-        reddit = connect_reddit()
-        helper.post_work_to_all(db, work_id, reddit)
+        helper.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
