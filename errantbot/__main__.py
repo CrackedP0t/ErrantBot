@@ -6,6 +6,7 @@ import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 import itertools
+from functools import update_wrapper
 
 
 class DownCaseType(click.ParamType):
@@ -140,7 +141,7 @@ def crosspost(work_id, subreddits):
 
     helper.add_work_to_subreddits(db, work_id, subs_to_tags)
 
-    helper.post_work_to_all(db, work_id)
+    helper.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -148,7 +149,7 @@ def crosspost(work_id, subreddits):
 def retry_post(work_id):
     db = connect_db()
 
-    helper.post_work_to_all(db, work_id)
+    helper.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -185,7 +186,8 @@ def _extract(url):
 
 @cli.command()
 @click.argument("names", nargs=-1)
-def list_subs(names):
+@click.pass_context
+def list_subs(ctx, names):
     db = connect_db()
 
     cursor = db.cursor(cursor_factory=psycopg2.extensions.cursor)
