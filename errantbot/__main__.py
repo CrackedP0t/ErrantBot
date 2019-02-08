@@ -18,35 +18,6 @@ class DownCaseType(click.ParamType):
 DownCase = DownCaseType()
 
 
-def connect_reddit():
-    click.echo("Connecting to Reddit...")
-
-    reddit = None
-
-    with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())
-
-        reddit = apis.Reddit(secrets["reddit"])
-
-    reddit.authenticate()
-
-    return reddit.reddit
-
-
-def connect_imgur():
-    click.echo("Connecting to Imgur...")
-    imgur = None
-
-    with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())["imgur"]
-
-        imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
-
-    imgur.authenticate()
-
-    return imgur
-
-
 def connect_db():
     click.echo("Connecting to database...")
 
@@ -113,8 +84,6 @@ def add(source_url, subreddits, title, artist, series, nsfw):
                 )
             )
 
-    imgur = None
-
     click.echo("Saving to database... ")
     row_id = helper.save_work(
         db,
@@ -129,13 +98,10 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         subs_to_tags,
     )
 
-    click.echo("Uploading to Imgur... ")
-    imgur = connect_imgur()
-    helper.upload_to_imgur(db, row_id, imgur)
+    helper.upload_to_imgur(db, row_id)
 
     if len(subreddits) > 0:
-        reddit = connect_reddit()
-        helper.post_work_to_all(db, row_id, reddit)
+        helper.post_work_to_all(db, row_id)
 
 
 @cli.command()
@@ -176,7 +142,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
     imgur = None
 
     click.echo("Saving to database... ")
-    row_id = helper.save_work(
+    work_id = helper.save_work(
         db,
         title,
         series,
@@ -189,13 +155,12 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
         subs_to_tags,
     )
 
-    click.echo("Uploading to Imgur... ")
     imgur = connect_imgur()
-    helper.upload_to_imgur(db, row_id, imgur)
+    helper.upload_to_imgur(db, work_id, imgur)
 
     if len(subreddits) > 0:
         reddit = connect_reddit()
-        helper.post_work_to_all(db, row_id, reddit)
+        helper.post_work_to_all(db, work_id, reddit)
 
 
 @cli.command()
@@ -224,10 +189,19 @@ def crosspost(work_id, subreddits):
 
 @cli.command()
 @click.argument("work-id", type=int)
-def retry(work_id):
+def retry_post(work_id):
     db = connect_db()
 
     helper.post_work_to_all(db, work_id, connect_reddit())
+
+
+@cli.command()
+@click.argument("work-id", type=int)
+def retry_upload(work_id):
+    db = connect_db()
+
+    imgur = connect_imgur()
+    helper.upload_to_imgur(db, work_id, imgur)
 
 
 @cli.command()
@@ -248,7 +222,10 @@ def _extract(url):
     work = extract.auto(url)
 
     for field in work._fields:
-        click.echo("{}\t{}".format(field, getattr(work, field)))
+        attr = getattr(work, field)
+
+        attr = "'" + attr + "'" if type(attr) == str else attr
+        click.echo("{}:\t{}".format(field, attr))
 
 
 if __name__ == "__main__":

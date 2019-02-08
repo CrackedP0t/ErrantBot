@@ -5,6 +5,7 @@ from urllib.parse import urlparse, parse_qs
 from collections import namedtuple
 from pixivpy3 import AppPixivAPI
 import tomlkit
+from bs4 import BeautifulSoup
 
 Work = namedtuple(
     "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
@@ -41,9 +42,7 @@ def artstation(page_url):
 
     clean_artist = antifun.sub("", artist).strip()
 
-    work = Work(title, clean_artist, None, nsfw, image_url, page_url)
-
-    return work
+    return Work(title, clean_artist, None, nsfw, image_url, page_url)
 
 
 def pixiv(page_url):
@@ -60,7 +59,7 @@ def pixiv(page_url):
 
     data = api.illust_detail(id)["illust"]
 
-    work = Work(
+    return Work(
         data["title"],
         data["user"]["name"],
         data["series"],
@@ -69,11 +68,40 @@ def pixiv(page_url):
         page_url,
     )
 
-    return work
+
+def hentai_foundry(page_url):
+    res = requests.get(page_url + "?enterAgree=1")
+
+    res.raise_for_status()
+
+    soup = BeautifulSoup(res.text, features="html.parser")
+
+    image_url = "https:" + soup.find(id="picBox").find(class_="boxbody").img["src"]
+
+    title = soup.main.find(class_="titleSemantic").text
+
+    artist = soup.find(id="page").find_all("a")[1].text
+
+    category = soup.find(class_="categoryBreadcrumbs").find_all("a")
+
+    series = None
+
+    if category[0].text != "Original":
+        series = category[1].text
+
+    ratings = soup.find(class_="ratings_box")
+
+    nsfw = bool(ratings.find(title="Nudity") or ratings.find(title="Sexual content"))
+
+    return Work(title, artist, series, nsfw, image_url, page_url)
 
 
 def auto(page_url):
-    domains = {"artstation": artstation, "pixiv": pixiv}
+    domains = {
+        "artstation": artstation,
+        "pixiv": pixiv,
+        "hentai-foundry": hentai_foundry,
+    }
 
     no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)
 

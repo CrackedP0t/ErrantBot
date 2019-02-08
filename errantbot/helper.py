@@ -1,5 +1,7 @@
 import click
 from psycopg2.extensions import adapt, register_adapter, AsIs
+import tomlkit
+from errantbot import apis
 
 
 def escape_values(db, seq):
@@ -16,7 +18,38 @@ def parse_subreddits(sub_names):
     return subs_to_tags
 
 
-def post_work_to_all(db, work_id, reddit):
+def connect_imgur():
+    click.echo("Connecting to Imgur...")
+    imgur = None
+
+    with open("secrets.toml") as secrets_file:
+        secrets = tomlkit.parse(secrets_file.read())["imgur"]
+
+        imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
+
+    imgur.authenticate()
+
+    return imgur
+
+
+def connect_reddit():
+    click.echo("Connecting to Reddit...")
+
+    reddit = None
+
+    with open("secrets.toml") as secrets_file:
+        secrets = tomlkit.parse(secrets_file.read())
+
+        reddit = apis.Reddit(secrets["reddit"])
+
+    reddit.authenticate()
+
+    return reddit.reddit
+
+
+def post_work_to_all(db, work_id):
+    reddit = connect_reddit()
+
     cursor = db.cursor()
 
     cursor.execute(
@@ -57,7 +90,11 @@ def post_work_to_all(db, work_id, reddit):
         db.commit()
 
 
-def upload_to_imgur(db, work_id, imgur):
+def upload_to_imgur(db, work_id):
+    imgur = connect_imgur()
+
+    click.echo("Uploading to Imgur...")
+
     cursor = db.cursor()
 
     cursor.execute(
