@@ -2,6 +2,7 @@ import click
 from psycopg2.extensions import adapt, register_adapter, AsIs
 import tomlkit
 from errantbot import apis
+from datetime import timedelta
 
 
 def escape_values(db, seq):
@@ -55,9 +56,12 @@ def post_to_all_subreddits(db, work_id):
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
         source_image_url, flair_id, tag_series, name, rehost, custom_tag,
-        submissions.id FROM works
-        INNER JOIN submissions ON submissions.reddit_id is NULL
-        AND submissions.work_id = works.id INNER JOIN subreddits
+        submissions.id,
+        (select now() - MAX(submitted_on) from submissions where
+        subreddit_id = subreddits.id) time_since, FROM works
+        INNER JOIN submissions
+        ON submissions.reddit_id is NULL AND submissions.work_id = works.id
+        INNER JOIN subreddits
         ON submissions.subreddit_id = subreddits.id AND works.id = %s""",
         (work_id,),
     )
@@ -65,6 +69,16 @@ def post_to_all_subreddits(db, work_id):
     rows = cursor.fetchall()
 
     for row in rows:
+        since = row["time_since"]
+        if since < timedelta(days=1):
+            click.echo(
+                "Submitted to '{}' less than one day ago; you can try again in {}".format(
+                    row["name"], since
+                )
+            )
+
+            continue
+
         sub = reddit.subreddit(row["name"])
 
         title = "{title} ({artist}){series_tag}{tag}".format(
@@ -83,8 +97,9 @@ def post_to_all_subreddits(db, work_id):
         submission.reply("[Source]({})".format(row["source_url"]))
 
         cursor.execute(
-            "UPDATE submissions SET reddit_id = %s WHERE id = %s" "",
-            (submission.id, row["id"]),
+            """UPDATE submissions SET reddit_id = %s, submitted_on = to_timestamp(%s)
+            WHERE id = %s""",
+            (submission.id, int(submission.created_utc), row["id"]),
         )
 
         db.commit()

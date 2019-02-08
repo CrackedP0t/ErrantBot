@@ -28,7 +28,6 @@ class Imgur:
         self.client_secret = client_secret
 
     def authenticate(self):
-
         token = None
 
         if os.path.isfile("imgur_token.json"):
@@ -62,13 +61,8 @@ class Imgur:
         )
 
     def token_saver(token):
-        print("Refreshing!")
         with open("imgur_token.json", mode="w") as token_file:
             json.dump(token, token_file)
-
-    def test(self):
-        r = self.session.get("https://api.imgur.com/3/image/tJAaYoS")
-        print(r.content)
 
     def upload_url(self, url, title, description):
         return self.session.post(

@@ -1,9 +1,12 @@
 import tomlkit
 import click
+from click import echo
 from errantbot import extract, helper
 from click.types import StringParamType
 import psycopg2
 import psycopg2.extras
+from tabulate import tabulate
+import itertools
 
 
 class DownCaseType(click.ParamType):
@@ -179,6 +182,40 @@ def _extract(url):
 
         attr = "'" + attr + "'" if type(attr) == str else attr
         click.echo("{}:\t{}".format(field, attr))
+
+
+@cli.command()
+@click.argument("names", nargs=-1)
+def list_subs(names):
+    db = connect_db()
+
+    cursor = db.cursor(cursor_factory=psycopg2.extensions.cursor)
+
+    if len(names) > 0:
+        where = " WHERE subreddits.name IN %s"
+    else:
+        where = ""
+
+    cursor.execute(
+        """SELECT id, name, tag_series, flair_id, rehost,
+        (SELECT COUNT(*) FROM submissions WHERE subreddit_id = subreddits.id) post_count,
+        (SELECT MAX(submitted_on) FROM submissions WHERE subreddit_id = subreddits.id) last_post
+        FROM subreddits{} ORDER BY id""".format(
+            where
+        ),
+        (names,),
+    )
+    rows = cursor.fetchall()
+
+    cursor.execute(
+        """SELECT column_name FROM information_schema.columns WHERE
+        table_name='subreddits' ORDER BY ordinal_position"""
+    )
+    columns = itertools.chain(
+        map(lambda col: col[0], cursor.fetchall()), ("post_count", "last_post")
+    )
+
+    print(tabulate(rows, headers=columns))
 
 
 if __name__ == "__main__":
