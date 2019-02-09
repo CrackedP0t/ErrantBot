@@ -2,7 +2,7 @@ import click
 from psycopg2.extensions import adapt, register_adapter, AsIs
 import tomlkit
 from errantbot import apis
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 
 def escape_values(db, seq):
@@ -56,30 +56,30 @@ def post_to_all_subreddits(db, work_id):
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
         source_image_url, flair_id, tag_series, name, rehost, custom_tag,
-        submissions.id,
-        (select now() - MAX(submitted_on) from submissions where
-        subreddit_id = subreddits.id) time_since FROM works
+        submissions.id, last_submission_on FROM works
         INNER JOIN submissions
-        ON submissions.reddit_id is NULL AND submissions.work_id = works.id
+        ON submissions.reddit_id is NULL
+        AND submissions.work_id = works.id AND works.id = %s
         INNER JOIN subreddits
-        ON submissions.subreddit_id = subreddits.id AND works.id = %s""",
+        ON submissions.subreddit_id = subreddits.id""",
         (work_id,),
     )
 
     rows = cursor.fetchall()
 
     for row in rows:
-        since = row["time_since"]
-        if since < timedelta(days=1):
-            wait = timedelta(days=1) - since
-            wait = timedelta(wait.days, wait.seconds)
-            click.echo(
-                "Submitted to '{}' less than one day ago; you can try again in {}".format(
-                    row["name"], wait
+        if row["last_submission_on"]:
+            since = datetime.utcnow() - row["last_submission_on"]
+            if since < timedelta(days=1):
+                wait = timedelta(days=1) - since
+                wait = timedelta(wait.days, wait.seconds)
+                click.echo(
+                    "Submitted to '{}' less than one day ago; you can try again in {}".format(
+                        row["name"], wait
+                    )
                 )
-            )
 
-            continue
+                continue
 
         sub = reddit.subreddit(row["name"])
 

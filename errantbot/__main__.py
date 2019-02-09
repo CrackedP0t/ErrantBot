@@ -6,7 +6,6 @@ import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 import itertools
-from functools import update_wrapper
 
 
 class DownCaseType(click.ParamType):
@@ -198,9 +197,8 @@ def list_subs(ctx, names):
         where = ""
 
     cursor.execute(
-        """SELECT id, name, tag_series, flair_id, rehost,
-        (SELECT COUNT(*) FROM submissions WHERE subreddit_id = subreddits.id) post_count,
-        (SELECT MAX(submitted_on) FROM submissions WHERE subreddit_id = subreddits.id) last_post
+        """SELECT id, name, tag_series, flair_id, rehost, last_submission_on,
+        (SELECT COUNT(*) FROM submissions WHERE subreddit_id = subreddits.id) post_count
         FROM subreddits{} ORDER BY id""".format(
             where
         ),
@@ -213,7 +211,7 @@ def list_subs(ctx, names):
         table_name='subreddits' ORDER BY ordinal_position"""
     )
     columns = itertools.chain(
-        map(lambda col: col[0], cursor.fetchall()), ("post_count", "last_post")
+        map(lambda col: col[0], cursor.fetchall()), ("post_count",)
     )
 
     click.echo(tabulate(rows, headers=columns))
