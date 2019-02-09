@@ -5,6 +5,11 @@ from errantbot import apis
 from datetime import timedelta, datetime
 
 
+def errecho(*args, **kwargs):
+    kwargs["err"] = True
+    click.echo(*args, **kwargs)
+
+
 def escape_values(db, seq):
     return (b",".join(map(db.literal, seq))).decode()
 
@@ -34,7 +39,7 @@ def connect_imgur():
 
 
 def connect_reddit():
-    click.echo("Connecting to Reddit...", err=True)
+    errecho("Connecting to Reddit...")
 
     reddit = None
 
@@ -68,12 +73,16 @@ def post_to_all_subreddits(db, work_id):
     rows = cursor.fetchall()
 
     for row in rows:
+        if not row["series"] and row["tag_series"]:
+            errecho("Subreddit '{}' requires a series; skipped".format(row["name"]))
+            continue
+
         if row["last_submission_on"]:
             since = datetime.utcnow() - row["last_submission_on"]
             if since < timedelta(days=1):
                 wait = timedelta(days=1) - since
                 wait = timedelta(wait.days, wait.seconds)
-                click.echo(
+                errecho(
                     "Submitted to '{}' less than one day ago; you can try again in {}".format(
                         row["name"], wait
                     )
@@ -110,7 +119,7 @@ def post_to_all_subreddits(db, work_id):
 def upload_to_imgur(db, work_id):
     imgur = connect_imgur()
 
-    click.echo("Uploading to Imgur...", err="True")
+    errecho("Uploading to Imgur...")
 
     cursor = db.cursor()
 
@@ -137,6 +146,8 @@ def upload_to_imgur(db, work_id):
     )
     db.commit()
 
+    errecho("\tUploaded at {}".format(data["link"]))
+
 
 def save_work(
     db,
@@ -150,7 +161,7 @@ def save_work(
     source_image_url,
     subs_to_tags,
 ):
-    click.echo("Saving to database...", err=True)
+    errecho("Saving to database...")
 
     subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
 
@@ -174,6 +185,8 @@ def save_work(
     db.commit()
 
     work_id = cursor.fetchone()[0]
+
+    errecho("\tSaved; id is {}".format(work_id))
 
     add_work_to_subreddits(db, work_id, subs_to_tags)
 
@@ -239,28 +252,5 @@ def subreddits_exist(db, subreddit_names):
                 ", ".join(map(lambda sub: "'" + sub["name"] + "'", badsubs)),
                 "are" if n_bad > 1 else "is",
                 "them" if n_bad > 1 else "it",
-            )
-        )
-
-
-def check_series(db, subs_to_tags):
-    cursor = db.cursor()
-
-    cursor.execute(
-        """SELECT name FROM subreddits WHERE name IN %s
-            AND tag_series = true""",
-        (tuple(map(lambda sub: sub[0], subs_to_tags)),),
-    )
-
-    tagged_subs = cursor.fetchall()
-
-    length = len(tagged_subs)
-
-    if length > 0:
-        raise click.ClickException(
-            "Subreddit{} {} require{} a series".format(
-                "s" if length > 1 else "",
-                ", ".join(map(lambda sub: "'" + sub["name"] + "'", tagged_subs)),
-                "" if length > 1 else "s",
             )
         )

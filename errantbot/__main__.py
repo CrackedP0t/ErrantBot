@@ -1,6 +1,6 @@
 import tomlkit
 import click
-from errantbot import extract, helper
+from errantbot import extract, helper as h
 from click.types import StringParamType
 import psycopg2
 import psycopg2.extras
@@ -60,13 +60,10 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         work.source_url,
     )
 
-    subs_to_tags = helper.parse_subreddits(subreddits)
+    subs_to_tags = h.parse_subreddits(subreddits)
     db = connect_db()
 
-    if not series:
-        helper.check_series(db, subs_to_tags)
-
-    row_id = helper.save_work(
+    row_id = h.save_work(
         db,
         work.title,
         work.series,
@@ -79,10 +76,10 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         subs_to_tags,
     )
 
-    helper.upload_to_imgur(db, row_id)
+    h.upload_to_imgur(db, row_id)
 
     if len(subreddits) > 0:
-        helper.post_to_all_subreddits(db, row_id)
+        h.post_to_all_subreddits(db, row_id)
 
 
 @cli.command()
@@ -94,13 +91,10 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw")
 def add_custom(title, artist, source_url, source_image_url, subreddits, series, nsfw):
-    subs_to_tags = helper.parse_subreddits(subreddits)
+    subs_to_tags = h.parse_subreddits(subreddits)
     db = connect_db()
 
-    if not series:
-        helper.check_series(subs_to_tags)
-
-    work_id = helper.save_work(
+    work_id = h.save_work(
         db,
         title,
         series,
@@ -113,10 +107,10 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
         subs_to_tags,
     )
 
-    helper.upload_to_imgur(db, work_id)
+    h.upload_to_imgur(db, work_id)
 
     if len(subreddits) > 0:
-        helper.post_to_all_subreddits(db, work_id)
+        h.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -127,7 +121,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 def add_sub(name, tag_series, flair_id, rehost):
     db = connect_db()
 
-    helper.add_subreddit(db, name, tag_series, flair_id, not rehost)
+    h.add_subreddit(db, name, tag_series, flair_id, not rehost)
 
 
 @cli.command()
@@ -136,11 +130,11 @@ def add_sub(name, tag_series, flair_id, rehost):
 def crosspost(work_id, subreddits):
     db = connect_db()
 
-    subs_to_tags = helper.parse_subreddits(subreddits)
+    subs_to_tags = h.parse_subreddits(subreddits)
 
-    helper.add_work_to_subreddits(db, work_id, subs_to_tags)
+    h.add_work_to_subreddits(db, work_id, subs_to_tags)
 
-    helper.post_to_all_subreddits(db, work_id)
+    h.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -148,7 +142,7 @@ def crosspost(work_id, subreddits):
 def retry_post(work_id):
     db = connect_db()
 
-    helper.post_to_all_subreddits(db, work_id)
+    h.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -156,13 +150,13 @@ def retry_post(work_id):
 def retry_upload(work_id):
     db = connect_db()
 
-    helper.upload_to_imgur(db, work_id)
+    h.upload_to_imgur(db, work_id)
 
 
 @cli.command()
 @click.argument("subreddit-name", type=DownCase)
 def list_flairs(subreddit_name):
-    reddit = helper.connect_reddit()
+    reddit = h.connect_reddit()
 
     sub = reddit.subreddit(subreddit_name)
 
