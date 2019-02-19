@@ -198,20 +198,5 @@ def list_subs(ctx, names):
     click.echo(tabulate(rows, headers=columns))
 
 
-@cli.command()
-@click.argument("subreddits", nargs=-1)
-def test(subreddits):
-
-    subreddits = h.Subreddits(subreddits)
-
-    print(subreddits.names)
-    print(subreddits.flairs)
-    print(subreddits.tags)
-
-    print(subreddits.n_f_t)
-
-
-
-
 if __name__ == "__main__":
     cli()

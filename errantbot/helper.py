@@ -101,11 +101,13 @@ def post_to_all_subreddits(db, work_id):
 
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
-        source_image_url, flair_id, tag_series, name, rehost, custom_tag,
-        submissions.id, last_submission_on FROM works
-        INNER JOIN submissions
-        ON submissions.reddit_id is NULL
-        AND submissions.work_id = works.id AND works.id = %s
+        source_image_url, name, tag_series, custom_tag, submissions.id,
+        COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
+        rehost, last_submission_on
+        FROM works
+        INNER JOIN submissions ON
+        submissions.reddit_id is NULL AND
+        submissions.work_id = works.id AND works.id = %s
         INNER JOIN subreddits
         ON submissions.subreddit_id = subreddits.id""",
         (work_id,),
