@@ -59,8 +59,8 @@ def errecho(*args, **kwargs):
     click.echo(*args, **kwargs)
 
 
-def escape_values(db, seq):
-    return (b",".join(map(db.literal, seq))).decode()
+# def escape_values(db, seq):
+    # return (b",".join(map(db.literal, seq))).decode()
 
 
 def connect_imgur():
@@ -95,6 +95,8 @@ def connect_reddit():
 def post_to_all_subreddits(db, work_id):
     reddit = connect_reddit()
 
+    errecho("Posting...")
+
     cursor = db.cursor()
 
     cursor.execute(
@@ -113,7 +115,7 @@ def post_to_all_subreddits(db, work_id):
 
     for row in rows:
         if not row["series"] and row["tag_series"]:
-            errecho("Subreddit '{}' requires a series; skipped".format(row["name"]))
+            errecho("\tSubreddit '{}' requires a series; skipped".format(row["name"]))
             continue
 
         if row["last_submission_on"]:
@@ -122,7 +124,7 @@ def post_to_all_subreddits(db, work_id):
                 wait = timedelta(days=1) - since
                 wait = timedelta(wait.days, wait.seconds)
                 errecho(
-                    "Submitted to '{}' less than one day ago; you can try again in {}".format(
+                    "\tSubmitted to '{}' less than one day ago; you can try again in {}".format(
                         row["name"], wait
                     )
                 )
@@ -140,6 +142,8 @@ def post_to_all_subreddits(db, work_id):
         url = row["imgur_image_url" if row["rehost"] else "source_image_url"]
 
         submission = sub.submit(title, url=url, flair_id=row["flair_id"])
+
+        errecho("\tSubmitted to '{}' at {}".format(row["name"], submission.permalink))
 
         if row["nsfw"]:
             submission.mod.nsfw()
@@ -223,7 +227,7 @@ def save_work(
 
     work_id = cursor.fetchone()[0]
 
-    errecho("\tSaved; id is {}".format(work_id))
+    errecho("\tSaved with id {}".format(work_id))
 
     add_submissions(db, work_id, subreddits)
 
