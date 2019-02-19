@@ -65,7 +65,7 @@ class Reddit:
             }
 
             if state != params["state"]:
-                send_message(client, "State mismatch".format(state, params["state"]))
+                send_message(client, "State mismatch")
                 raise click.ClickException("State mismatch")
             elif "error" in params:
                 send_message(client, params["error"])
