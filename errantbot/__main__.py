@@ -164,8 +164,7 @@ def _extract(url):
 
 @cli.command()
 @click.argument("names", nargs=-1)
-@click.pass_context
-def list_subs(ctx, names):
+def list_subs(names):
     db = connect_db()
 
     cursor = db.cursor(cursor_factory=psycopg2.extensions.cursor)

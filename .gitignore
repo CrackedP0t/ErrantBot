@@ -1,5 +1,5 @@
 secrets.toml
-
+reddit_token.json
 imgur_token.json
 
 # Created by https://www.gitignore.io/api/python

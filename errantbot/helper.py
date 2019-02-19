@@ -130,9 +130,8 @@ def post_to_all_subreddits(db, work_id):
                 wait = timedelta(days=1) - since
                 wait = timedelta(wait.days, wait.seconds)
                 errecho(
-                    "\tSubmitted to '{}' less than one day ago; you can try again in {}".format(
-                        row["name"], wait
-                    )
+                    "\tSubmitted to '{}' less than one day ago; "
+                    "you can try again in {}".format(row["name"], wait)
                 )
 
                 continue
@@ -149,7 +148,11 @@ def post_to_all_subreddits(db, work_id):
 
         submission = sub.submit(title, url=url, flair_id=row["flair_id"])
 
-        errecho("\tSubmitted to '{}' at {}".format(row["name"], submission.permalink))
+        errecho(
+            "\tSubmitted to '{}' at https://reddit.com{}".format(
+                row["name"], submission.permalink
+            )
+        )
 
         if row["nsfw"]:
             submission.mod.nsfw()
@@ -263,7 +266,8 @@ def add_submissions(db, work_id, subreddits):
         SELECT %s, id, data.flair_id, tag FROM subreddits
         INNER JOIN (VALUES {}) AS data (subname, flair_id, tag)
         ON subreddits.name = data.subname
-        ON CONFLICT ON CONSTRAINT submissions_work_id_subreddit_id_key DO NOTHING""".format(
+        ON CONFLICT ON CONSTRAINT
+        submissions_work_id_subreddit_id_key DO NOTHING""".format(
             ", ".join(["%s"] * len(subreddits.n_f_t))
         ),
         (work_id, *subreddits.n_f_t),

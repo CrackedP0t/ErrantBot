@@ -2,6 +2,31 @@ import praw
 from requests_oauthlib import OAuth2Session
 import os
 import json
+import socket
+import secrets
+import click
+
+
+def receive_connection():
+    """Wait for and then return a connected socket..
+
+    Opens a TCP connection on port 8080, and waits for a single client.
+
+    """
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("localhost", 8080))
+    server.listen(1)
+    client = server.accept()[0]
+    server.close()
+    return client
+
+
+def send_message(client, message):
+    """Send message to client and close the connection."""
+    print(message)
+    client.send("HTTP/1.1 200 OK\r\n\r\n{}".format(message).encode("utf-8"))
+    client.close()
 
 
 class Reddit:
@@ -9,13 +34,53 @@ class Reddit:
         self.secrets = secrets
 
     def authenticate(self):
+        token = None
+
+        if os.path.isfile("reddit_token.json"):
+            with open("reddit_token.json") as token_file:
+                token = json.load(token_file)["refresh_token"]
+
         self.reddit = praw.Reddit(
             client_id=self.secrets["client_id"],
             client_secret=self.secrets["client_secret"],
-            password=self.secrets["password"],
-            username=self.secrets["username"],
+            redirect_uri="http://localhost:8080",
+            refresh_token=token,
             user_agent="ErrantBot",
         )
+
+        if not token:
+            state = secrets.token_urlsafe()
+
+            print(
+                "Open this URL in your browser: "
+                + self.reddit.auth.url(["identity", "flair", "submit"], state)
+            )
+
+            client = receive_connection()
+            data = client.recv(1024).decode("utf-8")
+            param_tokens = data.split(" ", 2)[1].split("?", 1)[1].split("&")
+            params = {
+                key: value
+                for (key, value) in [token.split("=") for token in param_tokens]
+            }
+
+            if state != params["state"]:
+                send_message(client, "State mismatch".format(state, params["state"]))
+                raise click.ClickException("State mismatch")
+            elif "error" in params:
+                send_message(client, params["error"])
+                raise click.ClickException(
+                    "Error authenticating with Reddit: " + params["error"]
+                )
+
+            refresh_token = self.reddit.auth.authorize(params["code"])
+
+            with open("reddit_token.json", mode="w") as token_file:
+                json.dump({"refresh_token": refresh_token}, token_file)
+
+            send_message(client, "ErrantBot's authenticated!")
+
+        return self.reddit
 
 
 class Imgur:
