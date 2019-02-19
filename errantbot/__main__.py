@@ -1,23 +1,10 @@
 import tomlkit
 import click
 from errantbot import extract, helper as h
-from click.types import StringParamType
 import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 import itertools
-
-
-class DownCaseType(click.ParamType):
-    name = "case-insensitive text"
-
-    def convert(self, value, param, ctx):
-        s = StringParamType.convert(self, value, param, ctx)
-
-        return s.lower()
-
-
-DownCase = DownCaseType()
 
 
 def connect_db():
@@ -43,7 +30,7 @@ def cli():
 
 @cli.command()
 @click.argument("source-url", required=True)
-@click.argument("subreddits", nargs=-1, type=DownCase)
+@click.argument("subreddits", nargs=-1)
 @click.option("--title", "-t")
 @click.option("--artist", "-a")
 @click.option("--series", "-s")
@@ -60,7 +47,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         work.source_url,
     )
 
-    subs_to_tags = h.parse_subreddits(subreddits)
+    subreddits = h.Subreddits(subreddits)
     db = connect_db()
 
     row_id = h.save_work(
@@ -73,7 +60,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         None,
         work.nsfw,
         work.image_url,
-        subs_to_tags,
+        subreddits,
     )
 
     h.upload_to_imgur(db, row_id)
@@ -87,11 +74,11 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 @click.argument("artist")
 @click.argument("source-url")
 @click.argument("source-image-url")
-@click.argument("subreddits", nargs=-1, type=DownCase)
+@click.argument("subreddits", nargs=-1)
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw")
 def add_custom(title, artist, source_url, source_image_url, subreddits, series, nsfw):
-    subs_to_tags = h.parse_subreddits(subreddits)
+    subreddits = h.Subreddits(subreddits)
     db = connect_db()
 
     work_id = h.save_work(
@@ -104,7 +91,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
         None,
         nsfw,
         source_image_url,
-        subs_to_tags,
+        subreddits,
     )
 
     h.upload_to_imgur(db, work_id)
@@ -114,7 +101,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 
 
 @cli.command()
-@click.argument("name", type=DownCase)
+@click.argument("name")
 @click.option("--tag-series", "-t", is_flag=True)
 @click.option("--flair-id", "-f")
 @click.option("--rehost", "-r", is_flag=True)
@@ -126,15 +113,15 @@ def add_sub(name, tag_series, flair_id, rehost):
 
 @cli.command()
 @click.argument("work-id", type=int)
-@click.argument("subreddits", nargs=-1, type=DownCase)
+@click.argument("subreddits", nargs=-1)
 def crosspost(work_id, subreddits):
     db = connect_db()
 
-    subs_to_tags = h.parse_subreddits(subreddits)
+    subreddits = h.Subreddits(subreddits)
 
-    h.add_work_to_subreddits(db, work_id, subs_to_tags)
+    h.add_submissions(db, work_id, subreddits)
 
-    h.post_to_all_subreddits(db, work_id)
+    # h.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -154,7 +141,7 @@ def retry_upload(work_id):
 
 
 @cli.command()
-@click.argument("subreddit-name", type=DownCase)
+@click.argument("subreddit-name")
 def list_flairs(subreddit_name):
     reddit = h.connect_reddit()
 
@@ -209,6 +196,21 @@ def list_subs(ctx, names):
     )
 
     click.echo(tabulate(rows, headers=columns))
+
+
+@cli.command()
+@click.argument("subreddits", nargs=-1)
+def test(subreddits):
+
+    subreddits = h.Subreddits(subreddits)
+
+    print(subreddits.names)
+    print(subreddits.flairs)
+    print(subreddits.tags)
+
+    print(subreddits.n_f_t)
+
+
 
 
 if __name__ == "__main__":

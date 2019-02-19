@@ -1,16 +1,21 @@
 import regex
 import requests
 import tldextract
-from pprint import pprint
 from urllib.parse import urlparse, parse_qs, quote
 from collections import namedtuple
 from pixivpy3 import AppPixivAPI
 import tomlkit
 from bs4 import BeautifulSoup
+import click
 
 Work = namedtuple(
     "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
 )
+
+
+def get_secrets():
+    with open("secrets.toml") as secrets_file:
+        return tomlkit.parse(secrets_file.read())
 
 
 def artstation(page_url):
@@ -54,9 +59,8 @@ def pixiv(page_url):
 
     api = AppPixivAPI()
 
-    with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())["pixiv"]
-        api.login(secrets["username"], secrets["password"])
+    secrets = get_secrets()["pixiv"]
+    api.login(secrets["username"], secrets["password"])
 
     data = api.illust_detail(id)["illust"]
 
@@ -118,12 +122,51 @@ def deviantart(page_url):
     )
 
 
+# Note: Due to FurAffinity's system, in order to access NSFW images we need to use
+# the user's cookies taken from their browser.
+# Therefore, FurAffinity integration will probably break a lot.
+def furaffinity(page_url):
+    secrets = get_secrets()["furaffinity"]
+
+    res = requests.get(page_url, cookies=secrets)
+
+    res.raise_for_status()
+
+    soup = BeautifulSoup(res.text, features="html.parser")
+
+    body_id = soup.body["id"]
+
+    if body_id == "pageid-matureimage-error":
+        raise click.ClickException(
+            "Page blocked by content filter settings; check your cookies"
+        )
+
+    if body_id != "pageid-submission":
+        raise click.ClickException("Page does not appear to be a submission")
+
+    cat = soup.find(class_="maintable").find(class_="maintable").find(class_="cat")
+
+    title = cat.b.text
+    artist = cat.a.text
+
+    nsfw = bool(
+        soup.find(class_="stats-container").find(
+            name="img", alt=regex.compile(r"(?:Mature|Adult)")
+        )
+    )
+
+    image_url = "http:" + soup.find(name="a", text="Download")["href"]
+
+    return Work(title, artist, None, nsfw, image_url, page_url)
+
+
 def auto(page_url):
     domains = {
         "artstation": artstation,
         "pixiv": pixiv,
         "hentai-foundry": hentai_foundry,
         "deviantart": deviantart,
+        "furaffinity": furaffinity,
     }
 
     no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)

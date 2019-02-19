@@ -1,8 +1,57 @@
 import click
-from psycopg2.extensions import adapt, register_adapter, AsIs
 import tomlkit
 from errantbot import apis
 from datetime import timedelta, datetime
+import regex
+
+
+class Subreddits:
+    find_name = regex.compile(r"^[^@#]*")
+    find_flair_id = regex.compile(r"@([^#]*)")
+    find_tag = regex.compile(r"#(.*)$")
+
+    val_name = regex.compile(r"[a-zA-Z0-9_]+")
+    val_flair_id = regex.compile(r"([a-f0-9-]){8}-(?1){4}-(?1){4}-(?1){4}-(?1){12}")
+
+    def __init__(self, list_of_text):
+        self.names = []
+        self.flairs = []
+        self.tags = []
+
+        for text in list_of_text:
+            name = self.find_name.search(text)
+            if not name:
+                raise click.ClickException(
+                    "Subreddit name required in argument '{}'".format(text)
+                )
+            name = name[0]
+            if not self.val_name.fullmatch(name):
+                raise click.ClickException("Invalid name '{}'".format(name))
+
+            flair_id = self.find_flair_id.search(text)
+            if flair_id:
+                flair_id = flair_id[1]
+                if not self.val_flair_id.fullmatch(flair_id):
+                    raise click.ClickException("Invalid flair id '{}'".format(flair_id))
+
+            tag = self.find_tag.search(text)
+            if tag:
+                tag = tag[1]
+
+            self.names.append(name)
+            self.flairs.append(flair_id)
+            self.tags.append(tag)
+
+        # Tuple for Psycopg's adaptation
+
+        self.names = tuple(self.names)
+        self.flairs = tuple(self.flairs)
+        self.tags = tuple(self.tags)
+
+        self.n_f_t = tuple(
+            (self.names[i], self.flairs[i], self.tags[i])
+            for i in range(len(self.names))
+        )
 
 
 def errecho(*args, **kwargs):
@@ -12,16 +61,6 @@ def errecho(*args, **kwargs):
 
 def escape_values(db, seq):
     return (b",".join(map(db.literal, seq))).decode()
-
-
-def parse_subreddits(sub_names):
-    def splitter(name):
-        pair = name.split("#")
-        return (pair[0], pair[1] if len(pair) == 2 else None)
-
-    subs_to_tags = tuple(map(splitter, sub_names))
-
-    return subs_to_tags
 
 
 def connect_imgur():
@@ -159,11 +198,9 @@ def save_work(
     imgur_image_url,
     nsfw,
     source_image_url,
-    subs_to_tags,
+    subreddits
 ):
     errecho("Saving to database...")
-
-    subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
 
     cursor = db.cursor()
 
@@ -188,7 +225,7 @@ def save_work(
 
     errecho("\tSaved; id is {}".format(work_id))
 
-    add_work_to_subreddits(db, work_id, subs_to_tags)
+    add_submissions(db, work_id, subreddits)
 
     return work_id
 
@@ -205,29 +242,20 @@ def add_subreddit(db, name, tag_series, flair_id, rehost):
     db.commit()
 
 
-def add_work_to_subreddits(db, work_id, subs_to_tags):
-    subreddits_exist(db, tuple(map(lambda sub: sub[0], subs_to_tags)))
-
-    class SubsToTags:
-        def __init__(self, s2t):
-            self.s2t = s2t
-
-    def adapt_substotags(obj):
-        return AsIs(
-            ",".join(map(lambda pair: adapt(pair).getquoted().decode(), obj.s2t))
-        )
-
-    register_adapter(SubsToTags, adapt_substotags)
+def add_submissions(db, work_id, subreddits):
+    subreddits_exist(db, subreddits.names)
 
     cursor = db.cursor()
 
+    # Fairly jank, but works
     cursor.execute(
-        """INSERT INTO submissions
-        (work_id, subreddit_id, custom_tag)
-        SELECT %s, id, tag FROM subreddits INNER JOIN (VALUES %s) AS tags (subname, tag)
-        ON subreddits.name = tags.subname
-        ON CONFLICT ON CONSTRAINT submissions_work_id_subreddit_id_key DO NOTHING""",
-        (work_id, SubsToTags(subs_to_tags)),
+        """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)
+        SELECT %s, id, data.flair_id, tag FROM subreddits
+        INNER JOIN (VALUES {}) AS data (subname, flair_id, tag)
+        ON subreddits.name = data.subname
+        ON CONFLICT ON CONSTRAINT submissions_work_id_subreddit_id_key DO NOTHING"""
+        .format(", ".join(["%s"] * len(subreddits.n_f_t))),
+        (work_id, *subreddits.n_f_t)
     )
     db.commit()
 
