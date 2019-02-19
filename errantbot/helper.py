@@ -13,10 +13,15 @@ class Subreddits:
     val_name = regex.compile(r"[a-zA-Z0-9_]+")
     val_flair_id = regex.compile(r"([a-f0-9-]){8}-(?1){4}-(?1){4}-(?1){4}-(?1){12}")
 
+    def __len__(self):
+        return self.length
+
     def __init__(self, list_of_text):
         self.names = []
         self.flairs = []
         self.tags = []
+
+        self.length = len(list_of_text)
 
         for text in list_of_text:
             name = self.find_name.search(text)
@@ -49,8 +54,7 @@ class Subreddits:
         self.tags = tuple(self.tags)
 
         self.n_f_t = tuple(
-            (self.names[i], self.flairs[i], self.tags[i])
-            for i in range(len(self.names))
+            (self.names[i], self.flairs[i], self.tags[i]) for i in range(self.length)
         )
 
 
@@ -60,7 +64,7 @@ def errecho(*args, **kwargs):
 
 
 # def escape_values(db, seq):
-    # return (b",".join(map(db.literal, seq))).decode()
+# return (b",".join(map(db.literal, seq))).decode()
 
 
 def connect_imgur():
@@ -204,7 +208,7 @@ def save_work(
     imgur_image_url,
     nsfw,
     source_image_url,
-    subreddits
+    subreddits,
 ):
     errecho("Saving to database...")
 
@@ -259,9 +263,10 @@ def add_submissions(db, work_id, subreddits):
         SELECT %s, id, data.flair_id, tag FROM subreddits
         INNER JOIN (VALUES {}) AS data (subname, flair_id, tag)
         ON subreddits.name = data.subname
-        ON CONFLICT ON CONSTRAINT submissions_work_id_subreddit_id_key DO NOTHING"""
-        .format(", ".join(["%s"] * len(subreddits.n_f_t))),
-        (work_id, *subreddits.n_f_t)
+        ON CONFLICT ON CONSTRAINT submissions_work_id_subreddit_id_key DO NOTHING""".format(
+            ", ".join(["%s"] * len(subreddits.n_f_t))
+        ),
+        (work_id, *subreddits.n_f_t),
     )
     db.commit()
 

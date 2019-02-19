@@ -155,7 +155,7 @@ def furaffinity(page_url):
         )
     )
 
-    image_url = "http:" + soup.find(name="a", text="Download")["href"]
+    image_url = "https:" + soup.find(name="a", text="Download")["href"]
 
     return Work(title, artist, None, nsfw, image_url, page_url)
 
