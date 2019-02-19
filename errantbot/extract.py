@@ -126,9 +126,9 @@ def deviantart(page_url):
 # the user's cookies taken from their browser.
 # Therefore, FurAffinity integration will probably break a lot.
 def furaffinity(page_url):
-    secrets = get_secrets()["furaffinity"]
+    cookies = get_secrets()["furaffinity"]["cookies"]
 
-    res = requests.get(page_url, cookies=secrets)
+    res = requests.get(page_url, cookies=cookies)
 
     res.raise_for_status()
 
