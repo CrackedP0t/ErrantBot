@@ -119,7 +119,7 @@ def crosspost(work_id, subreddits):
 
     h.add_submissions(db, work_id, subreddits)
 
-    # h.post_to_all_subreddits(db, work_id)
+    h.post_to_all_subreddits(db, work_id)
 
 
 @cli.command()
@@ -145,9 +145,9 @@ def list_flairs(subreddit_name):
 
     sub = reddit.subreddit(subreddit_name)
 
-    for flair in sub.flair.link_templates:
-        if not flair["mod_only"]:
-            click.echo("{text}:\t{id}".format(**flair))
+    columns = map(lambda flair: (flair["text"], flair["id"]), sub.flair.link_templates)
+
+    click.echo(tabulate(columns, headers=["Text", "ID"]))
 
 
 @cli.command("extract")
@@ -193,7 +193,6 @@ def list_subs(names):
     )
 
     click.echo(tabulate(rows, headers=columns))
-
 
 if __name__ == "__main__":
     cli()

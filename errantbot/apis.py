@@ -5,6 +5,7 @@ import json
 import socket
 import secrets
 import click
+from errantbot import helper as h
 
 
 def receive_connection():
@@ -78,6 +79,7 @@ class Reddit:
                 json.dump({"refresh_token": refresh_token}, token_file)
 
             send_message(client, "ErrantBot's authenticated!")
+            h.errecho("\tAuthentication complete")
 
         return self.reddit
 
