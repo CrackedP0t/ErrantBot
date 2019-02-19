@@ -52,7 +52,7 @@ class Reddit:
             state = secrets.token_urlsafe()
 
             print(
-                "Open this URL in your browser: "
+                "Please go here to authorize: "
                 + self.reddit.auth.url(["identity", "flair", "submit"], state)
             )
 
