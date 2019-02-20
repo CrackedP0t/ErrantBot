@@ -1,6 +1,6 @@
 import tomlkit
 import click
-from errantbot import extract, helper as h
+from errantbot import extract, helper as h, paramtypes as types
 import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
@@ -29,8 +29,8 @@ def cli():
 
 
 @cli.command()
-@click.argument("source-url", required=True)
-@click.argument("subreddits", nargs=-1)
+@click.argument("source-url", required=True, type=types.url)
+@click.argument("subreddits", nargs=-1, type=types.submission)
 @click.option("--title", "-t")
 @click.option("--artist", "-a")
 @click.option("--series", "-s")
@@ -47,7 +47,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         work.source_url,
     )
 
-    subreddits = h.Subreddits(subreddits)
+    subreddits = h.Subreddits.from_tuples(subreddits)
     db = connect_db()
 
     row_id = h.save_work(
@@ -69,15 +69,15 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 
 
 @cli.command()
-@click.argument("title")
-@click.argument("artist")
-@click.argument("source-url")
-@click.argument("source-image-url")
-@click.argument("subreddits", nargs=-1)
+@click.argument("title", required=True)
+@click.argument("artist", required=True)
+@click.argument("source-url", type=types.url, required=True)
+@click.argument("source-image-url", type=types.url, required=True)
+@click.argument("subreddits", nargs=-1, type=types.submission)
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw")
 def add_custom(title, artist, source_url, source_image_url, subreddits, series, nsfw):
-    subreddits = h.Subreddits(subreddits)
+    subreddits = h.Subreddits.from_tuples(subreddits)
     db = connect_db()
 
     work_id = h.save_work(
@@ -99,7 +99,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 
 
 @cli.command()
-@click.argument("name")
+@click.argument("name", required=True, type=types.subreddit)
 @click.option("--tag-series", "-t", is_flag=True)
 @click.option("--flair-id", "-f")
 @click.option("--rehost", "-r", is_flag=True)
@@ -110,12 +110,12 @@ def add_sub(name, tag_series, flair_id, rehost):
 
 
 @cli.command()
-@click.argument("work-id", type=int)
-@click.argument("subreddits", nargs=-1)
+@click.argument("work-id", type=int, required=True)
+@click.argument("subreddits", nargs=-1, type=types.submission)
 def crosspost(work_id, subreddits):
     db = connect_db()
 
-    subreddits = h.Subreddits(subreddits)
+    subreddits = h.Subreddits.from_tuples(subreddits)
 
     h.add_submissions(db, work_id, subreddits)
 
@@ -123,7 +123,7 @@ def crosspost(work_id, subreddits):
 
 
 @cli.command()
-@click.argument("work-id", type=int)
+@click.argument("work-id", type=int, required=True)
 def retry_post(work_id):
     db = connect_db()
 
@@ -131,7 +131,7 @@ def retry_post(work_id):
 
 
 @cli.command()
-@click.argument("work-id", type=int)
+@click.argument("work-id", type=int, required=True)
 def retry_upload(work_id):
     db = connect_db()
 
@@ -139,7 +139,7 @@ def retry_upload(work_id):
 
 
 @cli.command()
-@click.argument("subreddit-name")
+@click.argument("subreddit-name", type=types.subreddit, required=True)
 def list_flairs(subreddit_name):
     reddit = h.connect_reddit()
 
@@ -151,7 +151,7 @@ def list_flairs(subreddit_name):
 
 
 @cli.command("extract")
-@click.argument("url")
+@click.argument("url", required=True, type=types.url)
 def _extract(url):
     work = extract.auto(url)
 
@@ -163,7 +163,7 @@ def _extract(url):
 
 
 @cli.command()
-@click.argument("names", nargs=-1)
+@click.argument("names", nargs=-1, type=types.subreddit)
 def list_subs(names):
     db = connect_db()
 

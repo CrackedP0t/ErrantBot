@@ -15,6 +15,7 @@ click = "*"
 psycopg2-binary = "*"
 pixivpy = "*"
 tabulate = "*"
+validators = "*"
 
 [dev-packages]
 

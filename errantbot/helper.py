@@ -6,20 +6,25 @@ import regex
 
 
 class Subreddits:
-    find_name = regex.compile(r"^[^@#]*")
-    find_flair_id = regex.compile(r"@([^#]*)")
-    find_tag = regex.compile(r"#(.*)$")
+    find_name = regex.compile(r"^[^@+]*")
+    find_flair_id = regex.compile(r"@([^+]*)")
+    find_tag = regex.compile(r"\+(.*)$")
 
-    val_name = regex.compile(r"[a-zA-Z0-9_]+")
+    val_name = regex.compile(r"[A-Za-z0-9][A-Za-z0-9_]{2,20}")
     val_flair_id = regex.compile(r"([a-f0-9-]){8}-(?1){4}-(?1){4}-(?1){4}-(?1){12}")
 
     def __len__(self):
         return self.length
 
-    def __init__(self, list_of_text):
+    @classmethod
+    def from_text(cls, list_of_text):
+        self = cls()
+
         self.names = []
         self.flairs = []
         self.tags = []
+
+        self.n_f_t = []
 
         self.length = len(list_of_text)
 
@@ -27,17 +32,21 @@ class Subreddits:
             name = self.find_name.search(text)
             if not name:
                 raise click.ClickException(
-                    "Subreddit name required in argument '{}'".format(text)
+                    "Subreddit name not found in argument '{}'".format(text)
                 )
             name = name[0]
             if not self.val_name.fullmatch(name):
-                raise click.ClickException("Invalid name '{}'".format(name))
+                raise click.ClickException(
+                    "'{}' is not a valid subreddit name".format(name)
+                )
 
             flair_id = self.find_flair_id.search(text)
             if flair_id:
                 flair_id = flair_id[1]
                 if not self.val_flair_id.fullmatch(flair_id):
-                    raise click.ClickException("Invalid flair id '{}'".format(flair_id))
+                    raise click.ClickException(
+                        "'{}' is not a valid flair ID".format(flair_id)
+                    )
 
             tag = self.find_tag.search(text)
             if tag:
@@ -47,15 +56,31 @@ class Subreddits:
             self.flairs.append(flair_id)
             self.tags.append(tag)
 
+            self.n_f_t.append((name, flair_id, tag))
+
         # Tuple for Psycopg's adaptation
 
         self.names = tuple(self.names)
         self.flairs = tuple(self.flairs)
         self.tags = tuple(self.tags)
 
-        self.n_f_t = tuple(
-            (self.names[i], self.flairs[i], self.tags[i]) for i in range(self.length)
-        )
+        self.n_f_t = tuple(self.n_f_t)
+
+        return self
+
+    @classmethod
+    def from_tuples(cls, tuples):
+        self = cls()
+
+        self.n_f_t = tuple(tuples)
+
+        self.names = tuple(map(lambda s: s[0], self.n_f_t))
+        self.flairs = tuple(map(lambda s: s[1], self.n_f_t))
+        self.tags = tuple(map(lambda s: s[2], self.n_f_t))
+
+        self.length = len(self.n_f_t)
+
+        return self
 
 
 def errecho(*args, **kwargs):
@@ -140,7 +165,7 @@ def post_to_all_subreddits(db, work_id):
 
         title = "{title} ({artist}){series_tag}{tag}".format(
             series_tag=" [" + row["series"] + "]" if row["tag_series"] else "",
-            tag=" [" + row["custom_tag"] + "]" if row["custom_tag"] else "",
+            tag=" " + row["custom_tag"] if row["custom_tag"] else "",
             **row
         )
 

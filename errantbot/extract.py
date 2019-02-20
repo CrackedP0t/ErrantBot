@@ -8,14 +8,15 @@ import tomlkit
 from bs4 import BeautifulSoup
 import click
 
-Work = namedtuple(
-    "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
-)
-
 
 def get_secrets():
     with open("secrets.toml") as secrets_file:
         return tomlkit.parse(secrets_file.read())
+
+
+Work = namedtuple(
+    "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
+)
 
 
 def artstation(page_url):
