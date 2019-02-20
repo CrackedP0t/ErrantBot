@@ -194,5 +194,6 @@ def list_subs(names):
 
     click.echo(tabulate(rows, headers=columns))
 
+
 if __name__ == "__main__":
     cli()

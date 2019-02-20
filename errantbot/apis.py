@@ -53,7 +53,9 @@ class Reddit:
 
             print(
                 "Please go here to authorize: "
-                + self.reddit.auth.url(["identity", "flair", "submit"], state)
+                + self.reddit.auth.url(
+                    ["identity", "flair", "submit", "read", "modposts"], state
+                )
             )
 
             client = receive_connection()
@@ -79,7 +81,8 @@ class Reddit:
                 json.dump({"refresh_token": refresh_token}, token_file)
 
             send_message(client, "ErrantBot's authenticated!")
-            h.errecho("\tAuthentication complete")
+
+        h.errecho("\tAuthentication complete")
 
         return self.reddit
 
