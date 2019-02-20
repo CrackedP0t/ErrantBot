@@ -6,6 +6,7 @@ import socket
 import secrets
 import click
 from errantbot import helper as h
+from urllib.parse import quote, urlparse
 
 
 def receive_connection():
@@ -134,7 +135,15 @@ class Imgur:
             json.dump(token, token_file)
 
     def upload_url(self, url, title, description):
+        # Quote for Unicode in path
+        parts = urlparse(url)
+        quoted = parts.scheme + "://" + parts.netloc + quote(parts.path)
         return self.session.post(
             "https://api.imgur.com/3/image",
-            {"type": "URL", "image": url, "title": title, "description": description},
+            {
+                "type": "URL",
+                "image": quoted,
+                "title": title,
+                "description": description,
+            },
         )
