@@ -47,7 +47,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         work.source_url,
     )
 
-    subreddits = h.Subreddits.from_tuples(subreddits)
+    subreddits = h.Subreddits(subreddits)
     db = connect_db()
 
     row_id = h.save_work(
@@ -77,7 +77,7 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw")
 def add_custom(title, artist, source_url, source_image_url, subreddits, series, nsfw):
-    subreddits = h.Subreddits.from_tuples(subreddits)
+    subreddits = h.Subreddits(subreddits)
     db = connect_db()
 
     work_id = h.save_work(
@@ -115,7 +115,7 @@ def add_sub(name, tag_series, flair_id, rehost):
 def crosspost(work_id, subreddits):
     db = connect_db()
 
-    subreddits = h.Subreddits.from_tuples(subreddits)
+    subreddits = h.Subreddits(subreddits)
 
     h.add_submissions(db, work_id, subreddits)
 

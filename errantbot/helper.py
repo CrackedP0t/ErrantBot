@@ -2,76 +2,13 @@ import click
 import tomlkit
 from errantbot import apis
 from datetime import timedelta, datetime
-import regex
 
 
 class Subreddits:
-    find_name = regex.compile(r"^[^@+]*")
-    find_flair_id = regex.compile(r"@([^+]*)")
-    find_tag = regex.compile(r"\+(.*)$")
-
-    val_name = regex.compile(r"[A-Za-z0-9][A-Za-z0-9_]{2,20}")
-    val_flair_id = regex.compile(r"([a-f0-9-]){8}-(?1){4}-(?1){4}-(?1){4}-(?1){12}")
-
     def __len__(self):
         return self.length
 
-    @classmethod
-    def from_text(cls, list_of_text):
-        self = cls()
-
-        self.names = []
-        self.flairs = []
-        self.tags = []
-
-        self.n_f_t = []
-
-        self.length = len(list_of_text)
-
-        for text in list_of_text:
-            name = self.find_name.search(text)
-            if not name:
-                raise click.ClickException(
-                    "Subreddit name not found in argument '{}'".format(text)
-                )
-            name = name[0]
-            if not self.val_name.fullmatch(name):
-                raise click.ClickException(
-                    "'{}' is not a valid subreddit name".format(name)
-                )
-
-            flair_id = self.find_flair_id.search(text)
-            if flair_id:
-                flair_id = flair_id[1]
-                if not self.val_flair_id.fullmatch(flair_id):
-                    raise click.ClickException(
-                        "'{}' is not a valid flair ID".format(flair_id)
-                    )
-
-            tag = self.find_tag.search(text)
-            if tag:
-                tag = tag[1]
-
-            self.names.append(name)
-            self.flairs.append(flair_id)
-            self.tags.append(tag)
-
-            self.n_f_t.append((name, flair_id, tag))
-
-        # Tuple for Psycopg's adaptation
-
-        self.names = tuple(self.names)
-        self.flairs = tuple(self.flairs)
-        self.tags = tuple(self.tags)
-
-        self.n_f_t = tuple(self.n_f_t)
-
-        return self
-
-    @classmethod
-    def from_tuples(cls, tuples):
-        self = cls()
-
+    def __init__(self, tuples):
         self.n_f_t = tuple(tuples)
 
         self.names = tuple(map(lambda s: s[0], self.n_f_t))
@@ -80,16 +17,10 @@ class Subreddits:
 
         self.length = len(self.n_f_t)
 
-        return self
-
 
 def errecho(*args, **kwargs):
     kwargs["err"] = True
     click.echo(*args, **kwargs)
-
-
-# def escape_values(db, seq):
-# return (b",".join(map(db.literal, seq))).decode()
 
 
 def connect_imgur():
