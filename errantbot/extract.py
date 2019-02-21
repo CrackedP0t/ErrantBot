@@ -6,7 +6,7 @@ from collections import namedtuple
 from pixivpy3 import AppPixivAPI
 from bs4 import BeautifulSoup
 import click
-from errantbot import helper as h
+from . import helper as h
 
 
 Work = namedtuple(

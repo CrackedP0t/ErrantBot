@@ -1,6 +1,6 @@
 import click
 import tomlkit
-from errantbot import apis
+from . import apis
 from datetime import timedelta, datetime
 
 

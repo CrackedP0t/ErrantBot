@@ -5,7 +5,7 @@ import json
 import socket
 import secrets
 import click
-from errantbot import helper as h
+from . import helper as h
 from urllib.parse import quote, urlparse
 
 

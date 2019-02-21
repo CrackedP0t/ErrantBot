@@ -1,5 +1,5 @@
 import click
-from errantbot import extract, helper as h, paramtypes as types
+from . import extract, helper as h, paramtypes as types
 import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
