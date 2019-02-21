@@ -4,14 +4,9 @@ import tldextract
 from urllib.parse import urlparse, parse_qs, quote
 from collections import namedtuple
 from pixivpy3 import AppPixivAPI
-import tomlkit
 from bs4 import BeautifulSoup
 import click
-
-
-def get_secrets():
-    with open("secrets.toml") as secrets_file:
-        return tomlkit.parse(secrets_file.read())
+from errantbot import helper as h
 
 
 Work = namedtuple(
@@ -60,7 +55,7 @@ def pixiv(page_url):
 
     api = AppPixivAPI()
 
-    secrets = get_secrets()["pixiv"]
+    secrets = h.get_secrets()["pixiv"]
     api.login(secrets["username"], secrets["password"])
 
     data = api.illust_detail(id)["illust"]
@@ -127,7 +122,7 @@ def deviantart(page_url):
 # the user's cookies taken from their browser.
 # Therefore, FurAffinity integration will probably break a lot.
 def furaffinity(page_url):
-    cookies = get_secrets()["furaffinity"]["cookies"]
+    cookies = h.get_secrets()["furaffinity"]["cookies"]
 
     res = requests.get(page_url, cookies=cookies)
 

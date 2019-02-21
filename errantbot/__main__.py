@@ -1,4 +1,3 @@
-import tomlkit
 import click
 from errantbot import extract, helper as h, paramtypes as types
 import psycopg2
@@ -10,17 +9,14 @@ import itertools
 def connect_db():
     click.echo("Connecting to database...", err=True)
 
-    db = None
-    with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())["database"]
+    secrets = h.get_secrets()["database"]
 
-        db = psycopg2.connect(
-            user=secrets["user"],
-            password=secrets["password"],
-            dbname=secrets["name"],
-            cursor_factory=psycopg2.extras.DictCursor,
-        )
-    return db
+    return psycopg2.connect(
+        user=secrets["user"],
+        password=secrets["password"],
+        dbname=secrets["name"],
+        cursor_factory=psycopg2.extras.DictCursor,
+    )
 
 
 @click.group()

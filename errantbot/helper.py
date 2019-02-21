@@ -23,14 +23,16 @@ def errecho(*args, **kwargs):
     click.echo(*args, **kwargs)
 
 
+def get_secrets():
+    with open("secrets.toml") as secrets_file:
+        return tomlkit.parse(secrets_file.read())
+
+
 def connect_imgur():
     click.echo("Connecting to Imgur...", err=True)
-    imgur = None
+    secrets = get_secrets()["imgur"]
 
-    with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())["imgur"]
-
-        imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
+    imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
 
     imgur.authenticate()
 
@@ -40,12 +42,7 @@ def connect_imgur():
 def connect_reddit():
     errecho("Connecting to Reddit...")
 
-    reddit = None
-
-    with open("secrets.toml") as secrets_file:
-        secrets = tomlkit.parse(secrets_file.read())
-
-        reddit = apis.Reddit(secrets["reddit"])
+    reddit = apis.Reddit(get_secrets()["reddit"])
 
     reddit.authenticate()
 
