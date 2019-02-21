@@ -3,7 +3,7 @@ import validators as val
 import regex
 
 
-class URLParamType(ParamType):
+class URL(ParamType):
     name = "URL"
 
     def convert(self, value, param, ctx):
@@ -13,7 +13,7 @@ class URLParamType(ParamType):
             self.fail("'{}' is not a valid URL".format(value), param, ctx)
 
 
-class FlairIDParamType(ParamType):
+class FlairID(ParamType):
     name = "flair ID"
 
     val_flair_id = regex.compile(r"([a-f0-9]){8}-(?1){4}-(?1){4}-(?1){4}-(?1){12}")
@@ -35,7 +35,7 @@ class FlairIDParamType(ParamType):
             self.fail("'{}' is not a valid flair ID".format(value), param, ctx)
 
 
-class SubredditParamType(ParamType):
+class Subreddit(ParamType):
     name = "subreddit"
 
     # Found in Reddit's old source code - RIP
@@ -56,7 +56,7 @@ class SubredditParamType(ParamType):
             self.fail("'{}' is not a valid subreddit name".format(value), param, ctx)
 
 
-class SubmissionParamType(ParamType):
+class Submission(ParamType):
     name = "submission specifier"
 
     find_name = regex.compile(r"^[^@+]*")
@@ -68,14 +68,14 @@ class SubmissionParamType(ParamType):
         if not name:
             self.fail("Subreddit name not found in '{}'".format(value), param, ctx)
 
-        name = SubredditParamType.process(name[0])
+        name = Subreddit.process(name[0])
         if not name:
             self.fail("'{}' is not a valid subreddit name".format(name), param, ctx)
 
         flair_id = self.find_flair_id.search(value)
         if flair_id:
             flair_id = flair_id[1]
-            if not FlairIDParamType.process(flair_id):
+            if not FlairID.process(flair_id):
                 self.fail("'{}' is not a valid flair ID".format(flair_id), param, ctx)
 
         tag = self.find_tag.search(value)
@@ -85,7 +85,7 @@ class SubmissionParamType(ParamType):
         return (name, flair_id, tag)
 
 
-url = URLParamType()
-flair_id = FlairIDParamType()
-subreddit = SubredditParamType()
-submission = SubmissionParamType()
+url = URL()
+flair_id = FlairID()
+subreddit = Subreddit()
+submission = Submission()
