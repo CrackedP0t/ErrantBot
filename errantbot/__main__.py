@@ -101,7 +101,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 @cli.command()
 @click.argument("name", required=True, type=types.subreddit)
 @click.option("--tag-series", "-t", is_flag=True)
-@click.option("--flair-id", "-f")
+@click.option("--flair-id", "-f", type=types.flair_id)
 @click.option("--rehost", "-r", is_flag=True)
 def add_sub(name, tag_series, flair_id, rehost):
     db = connect_db()
