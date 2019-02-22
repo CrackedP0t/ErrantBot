@@ -79,14 +79,14 @@ def post_to_all_subreddits(db, work_id, log_existing=False):
             if log_existing:
                 errecho(
                     "\tThis has already been submitted \
-                    to subreddit '{}'; skipped".format(
+                    to /r/{}; skipped".format(
                         row["name"]
                     )
                 )
             continue
 
         if not row["series"] and row["tag_series"]:
-            errecho("\tSubreddit '{}' requires a series; skipped".format(row["name"]))
+            errecho("\t/r/{} requires a series; skipped".format(row["name"]))
             continue
 
         if row["last_submission_on"]:
@@ -95,7 +95,7 @@ def post_to_all_subreddits(db, work_id, log_existing=False):
                 wait = timedelta(days=1) - since
                 wait = timedelta(wait.days, wait.seconds)
                 errecho(
-                    "\tSubmitted to '{}' less than one day ago; "
+                    "\tSubmitted to /r/{} less than one day ago; "
                     "you can try again in {}".format(row["name"], wait)
                 )
 
@@ -114,7 +114,7 @@ def post_to_all_subreddits(db, work_id, log_existing=False):
         submission = sub.submit(title, url=url, flair_id=row["flair_id"])
 
         errecho(
-            "\tSubmitted to '{}' at https://reddit.com{}".format(
+            "\tSubmitted to /r/{} at https://reddit.com{}".format(
                 row["name"], submission.permalink
             )
         )
@@ -281,9 +281,8 @@ def subreddits_known(db, subreddit_names):
 
     if n_bad > 0:
         raise click.ClickException(
-            "Subreddit{} {} {} unknown. Use 'add-sub' to register {}.".format(
-                "s" if n_bad > 1 else "",
-                ", ".join(map(lambda sub: "'" + sub["name"] + "'", badsubs)),
+            "{} {} unknown. Use 'add-sub' to register {}.".format(
+                ", ".join(map(lambda sub: "/r/" + sub["name"], badsubs)),
                 "are" if n_bad > 1 else "is",
                 "them" if n_bad > 1 else "it",
             )

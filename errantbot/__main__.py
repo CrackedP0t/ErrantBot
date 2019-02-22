@@ -105,9 +105,7 @@ def add_sub(name, tag_series, flair_id, rehost):
     status = h.subreddit_status(name, reddit)
 
     if not status:
-        raise click.ClickException(
-            "Subreddit '{}' is {}".format(name, status.name.lower())
-        )
+        raise click.ClickException("/r/{} is {}".format(name, status.name.lower()))
 
     db = connect_db()
 
@@ -151,15 +149,11 @@ def list_flairs(subreddit_name):
     sub = h.subreddit_or_status(reddit, subreddit_name)
 
     if not sub:
-        click.ClickException(
-            "Subreddit '{}' is {}".format(subreddit_name, sub.name.lower())
-        )
+        click.ClickException("/r/{} is {}".format(subreddit_name, sub.name.lower()))
 
     if not sub.can_assign_link_flair:
         click.echo(
-            "Subreddit '{}' does not allow users to assign link flair".format(
-                subreddit_name
-            )
+            "/r/{} does not allow users to assign link flair".format(subreddit_name)
         )
 
     else:
