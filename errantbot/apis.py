@@ -46,7 +46,7 @@ class Reddit:
             client_secret=self.secrets["client_secret"],
             redirect_uri="http://localhost:8080",
             refresh_token=token,
-            user_agent="ErrantBot"
+            user_agent="ErrantBot",
         )
 
         if not token:

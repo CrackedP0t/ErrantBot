@@ -52,7 +52,7 @@ def connect_reddit():
     return reddit.reddit
 
 
-def post_to_all_subreddits(db, work_id):
+def post_to_all_subreddits(db, work_id, log_existing=False):
     reddit = connect_reddit()
 
     errecho("Posting...")
@@ -63,10 +63,9 @@ def post_to_all_subreddits(db, work_id):
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
         source_image_url, name, tag_series, custom_tag, submissions.id,
         COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
-        rehost, last_submission_on
-        FROM works
-        INNER JOIN submissions ON
-        submissions.reddit_id is NULL AND
+        rehost, last_submission_on,
+        submissions.reddit_id IS NOT NULL AS already_submitted
+        FROM works INNER JOIN submissions ON
         submissions.work_id = works.id AND works.id = %s
         INNER JOIN subreddits
         ON submissions.subreddit_id = subreddits.id""",
@@ -76,6 +75,16 @@ def post_to_all_subreddits(db, work_id):
     rows = cursor.fetchall()
 
     for row in rows:
+        if row["already_submitted"]:
+            if log_existing:
+                errecho(
+                    "\tThis has already been submitted \
+                    to subreddit '{}'; skipped".format(
+                        row["name"]
+                    )
+                )
+            continue
+
         if not row["series"] and row["tag_series"]:
             errecho("\tSubreddit '{}' requires a series; skipped".format(row["name"]))
             continue
@@ -132,11 +141,21 @@ def upload_to_imgur(db, work_id):
     cursor = db.cursor()
 
     cursor.execute(
-        """SELECT title, artist, source_image_url, source_url
+        """SELECT title, artist, source_image_url, source_url, imgur_image_url
         FROM works WHERE id=%s""",
         (work_id,),
     )
     row = cursor.fetchone()
+
+    if row is None:
+        raise click.ClickException("Work id {} does not exist".format(work_id))
+
+    if row["imgur_image_url"]:
+        raise click.ClickException(
+            "Work id {} has already been uploaded at {}".format(
+                work_id, row["imgur_image_url"]
+            )
+        )
 
     resp = imgur.upload_url(
         row["source_image_url"],
@@ -228,6 +247,7 @@ def add_submissions(db, work_id, subreddits):
         ),
         (work_id, *subreddits.n_f_t),
     )
+
     db.commit()
 
 
@@ -256,13 +276,24 @@ def subreddits_known(db, subreddit_names):
 
 
 class SubStatus(enum.Enum):
-    OK = enum.auto(),
-    NONEXISTENT = enum.auto(),
-    BANNED = enum.auto(),
+    OK = enum.auto()
+    NONEXISTENT = enum.auto()
+    BANNED = enum.auto()
     PRIVATE = enum.auto()
 
     def __bool__(self):
         return self is __class__.OK
+
+
+def subreddit_or_status(reddit, name):
+    subreddit = reddit.subreddit(name)
+
+    status = subreddit_status(subreddit)
+
+    if not status:
+        return status
+    else:
+        return subreddit
 
 
 def subreddit_status(subreddit, reddit=None):

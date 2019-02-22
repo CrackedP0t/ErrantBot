@@ -4,7 +4,6 @@ import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 import itertools
-import prawcore
 
 
 def connect_db():
@@ -103,7 +102,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 def add_sub(name, tag_series, flair_id, rehost):
     reddit = h.connect_reddit()
 
-    status = h.subreddit_exists(reddit, name)
+    status = h.subreddit_status(name, reddit)
 
     if not status:
         raise click.ClickException(
@@ -133,7 +132,7 @@ def crosspost(work_id, subreddits):
 def retry_post(work_id):
     db = connect_db()
 
-    h.post_to_all_subreddits(db, work_id)
+    h.post_to_all_subreddits(db, work_id, True)
 
 
 @cli.command()
@@ -149,18 +148,25 @@ def retry_upload(work_id):
 def list_flairs(subreddit_name):
     reddit = h.connect_reddit()
 
-    sub = reddit.subreddit(subreddit_name)
+    sub = h.subreddit_or_status(reddit, subreddit_name)
 
-    try:
+    if not sub:
+        click.ClickException(
+            "Subreddit '{}' is {}".format(subreddit_name, sub.name.lower())
+        )
+
+    if not sub.can_assign_link_flair:
+        click.echo(
+            "Subreddit '{}' does not allow users to assign link flair".format(
+                subreddit_name
+            )
+        )
+
+    else:
         columns = map(
             lambda flair: (flair["text"], flair["id"]), sub.flair.link_templates
         )
         click.echo(tabulate(columns, headers=["Text", "ID"]))
-    except prawcore.exceptions.PrawcoreException as exp:
-        status = h.subreddit_status_handle(exp)
-        raise click.ClickException(
-            "Subreddit '{}' is {}".format(subreddit_name, status.name.lower())
-        )
 
 
 @cli.command("extract")
@@ -206,6 +212,13 @@ def list_subs(names):
     )
 
     click.echo(tabulate(rows, headers=columns))
+
+
+@cli.command()
+def test():
+    reddit = h.connect_reddit()
+    h.subreddit_status("rule34", reddit)
+
 
 if __name__ == "__main__":
     cli()
