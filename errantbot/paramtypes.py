@@ -43,6 +43,8 @@ class Subreddit(ParamType):
 
     @classmethod
     def process(cls, value):
+        value = value.replace("/r/", "")
+
         if not cls.val_subreddit_name.fullmatch(value):
             return False
         else:
