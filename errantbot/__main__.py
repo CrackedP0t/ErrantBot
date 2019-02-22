@@ -4,6 +4,7 @@ import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 import itertools
+import prawcore
 
 
 def connect_db():
@@ -100,6 +101,15 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 @click.option("--flair-id", "-f", type=types.flair_id)
 @click.option("--rehost", "-r", is_flag=True)
 def add_sub(name, tag_series, flair_id, rehost):
+    reddit = h.connect_reddit()
+
+    status = h.subreddit_exists(reddit, name)
+
+    if not status:
+        raise click.ClickException(
+            "Subreddit '{}' is {}".format(name, status.name.lower())
+        )
+
     db = connect_db()
 
     h.add_subreddit(db, name, tag_series, flair_id, not rehost)
@@ -141,9 +151,16 @@ def list_flairs(subreddit_name):
 
     sub = reddit.subreddit(subreddit_name)
 
-    columns = map(lambda flair: (flair["text"], flair["id"]), sub.flair.link_templates)
-
-    click.echo(tabulate(columns, headers=["Text", "ID"]))
+    try:
+        columns = map(
+            lambda flair: (flair["text"], flair["id"]), sub.flair.link_templates
+        )
+        click.echo(tabulate(columns, headers=["Text", "ID"]))
+    except prawcore.exceptions.PrawcoreException as exp:
+        status = h.subreddit_status_handle(exp)
+        raise click.ClickException(
+            "Subreddit '{}' is {}".format(subreddit_name, status.name.lower())
+        )
 
 
 @cli.command("extract")
@@ -189,7 +206,6 @@ def list_subs(names):
     )
 
     click.echo(tabulate(rows, headers=columns))
-
 
 if __name__ == "__main__":
     cli()

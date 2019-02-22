@@ -2,6 +2,9 @@ import click
 import tomlkit
 from . import apis
 from datetime import timedelta, datetime
+from prawcore import exceptions
+import praw
+import enum
 
 
 class Subreddits:
@@ -209,7 +212,7 @@ def add_subreddit(db, name, tag_series, flair_id, rehost):
 
 
 def add_submissions(db, work_id, subreddits):
-    subreddits_exist(db, subreddits.names)
+    subreddits_known(db, subreddits.names)
 
     cursor = db.cursor()
 
@@ -228,7 +231,7 @@ def add_submissions(db, work_id, subreddits):
     db.commit()
 
 
-def subreddits_exist(db, subreddit_names):
+def subreddits_known(db, subreddit_names):
     cursor = db.cursor()
 
     cursor.execute(
@@ -250,3 +253,35 @@ def subreddits_exist(db, subreddit_names):
                 "them" if n_bad > 1 else "it",
             )
         )
+
+
+class SubStatus(enum.Enum):
+    OK = enum.auto(),
+    NONEXISTENT = enum.auto(),
+    BANNED = enum.auto(),
+    PRIVATE = enum.auto()
+
+    def __bool__(self):
+        return self is __class__.OK
+
+
+def subreddit_status(subreddit, reddit=None):
+    if not isinstance(subreddit, praw.models.Subreddit):
+        subreddit = reddit.subreddit(subreddit)
+
+    try:
+        subreddit._fetch()
+    except exceptions.PrawcoreException as exp:
+        return subreddit_status_handle(exp)
+    return SubStatus.OK
+
+
+def subreddit_status_handle(exp):
+    if isinstance(exp, exceptions.Redirect):
+        return SubStatus.NONEXISTENT
+    elif isinstance(exp, exceptions.NotFound):
+        return SubStatus.BANNED
+    elif isinstance(exp, exceptions.Forbidden):
+        return SubStatus.PRIVATE
+
+    raise exp
