@@ -5,6 +5,7 @@ from datetime import timedelta, datetime
 from prawcore import exceptions
 import praw
 import enum
+import psycopg2
 
 
 class Subreddits:
@@ -235,35 +236,31 @@ def add_submissions(db, work_id, subreddits):
 
     cursor = db.cursor()
 
-    cursor.execute(
-        """SELECT name FROM submissions INNER JOIN subreddits ON
-        work_id = %s AND name IN %s AND subreddits.id = subreddit_id""",
-        (work_id, subreddits.names),
-    )
-
-    exists = []
-
-    for row in cursor.fetchall():
-        errecho("\tA submission already exists for /r/{}".format(row["name"]))
-        exists.append(row["name"])
-
-    if len(subreddits) > len(exists):
+    for triple in subreddits.n_f_t:
         # Fairly jank, but works
-        cursor.execute(
-            """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)
-            SELECT %s, id, data.flair_id, tag FROM subreddits
-            INNER JOIN (VALUES {}) AS data (subname, flair_id, tag)
-            ON subreddits.name = data.subname
-            ON CONFLICT ON CONSTRAINT
-            submissions_work_id_subreddit_id_key DO NOTHING""".format(
-                ", ".join(["%s"] * len(subreddits.n_f_t))
-            ),
-            (work_id, *subreddits.n_f_t),
-        )
+        try:
+            cursor.execute(
+                """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)
+                SELECT %s, id, data.flair_id, tag FROM subreddits
+                INNER JOIN (VALUES %s) AS data (subname, flair_id, tag)
+                ON subreddits.name = data.subname""",
+                # .format(", ".join(["%s"] * len(subreddits.n_f_t))),
+                (work_id, triple),
+            )
+        except psycopg2.IntegrityError as e:
+            msg = {
+                "check_req_flair": "/r/{} requires a flair",
+                "check_req_tag": "/r/{} requires a tag",
+                "already_exists": "/r/{} already has this work"
+            }.get(e.diag.constraint_name, None)
 
-        db.commit()
-
-    return exists
+            if msg:
+                errecho("\t" + msg.format(triple[0]))
+                db.rollback()
+            else:
+                raise e
+        else:
+            db.commit()
 
 
 def subreddits_known(db, subreddit_names):
