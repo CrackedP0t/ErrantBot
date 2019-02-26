@@ -237,21 +237,19 @@ def add_submissions(db, work_id, subreddits):
     cursor = db.cursor()
 
     for triple in subreddits.n_f_t:
-        # Fairly jank, but works
         try:
             cursor.execute(
                 """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)
                 SELECT %s, id, data.flair_id, tag FROM subreddits
                 INNER JOIN (VALUES %s) AS data (subname, flair_id, tag)
                 ON subreddits.name = data.subname""",
-                # .format(", ".join(["%s"] * len(subreddits.n_f_t))),
                 (work_id, triple),
             )
         except psycopg2.IntegrityError as e:
             msg = {
                 "check_req_flair": "/r/{} requires a flair",
                 "check_req_tag": "/r/{} requires a tag",
-                "already_exists": "/r/{} already has this work"
+                "already_exists": "/r/{} already has this work",
             }.get(e.diag.constraint_name, None)
 
             if msg:
