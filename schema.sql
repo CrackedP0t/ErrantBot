@@ -16,39 +16,24 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: check_req_flair_or_tag(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: check_req_flair(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.check_req_flair_or_tag() RETURNS trigger
-    LANGUAGE plpgsql
+CREATE FUNCTION public.check_req_flair(new_flair_id character varying, subreddit_id integer) RETURNS boolean
+    LANGUAGE sql
     AS $$
-DECLARE
---    NEW RECORD;
-    req_flair BOOL;
-    req_tag BOOL;
-    sub_name VARCHAR;
-    sub_flair_id VARCHAR;
-BEGIN
---    SELECT * INTO NEW FROM submissions WHERE id = 16;
+    SELECT new_flair_id IS NOT NULL OR NOT (SELECT req_flair FROM subreddits WHERE id = subreddit_id AND flair_id IS NULL);
+$$;
 
-    IF NEW.flair_id IS NULL THEN
-        SELECT subreddits.req_flair, flair_id, name INTO req_flair, sub_flair_id, sub_name FROM subreddits WHERE id = NEW.subreddit_id;
-        IF req_flair AND sub_flair_id IS NULL THEN
-            RAISE EXCEPTION '/r/% requires flair', sub_name USING detail = 
-                format('subreddit_id=%s,submission_id=%s', NEW.subreddit_id, NEW.id), errcode = 'EB001';
-        END IF;
-    END IF;
 
-    IF NEW.custom_tag IS NULL THEN
-        SELECT subreddits.req_tag, name INTO req_tag, sub_name FROM subreddits WHERE id = NEW.subreddit_id;
-        IF req_tag THEN
-            RAISE EXCEPTION '/r/% requires a tag', sub_name USING detail = 
-                format('subreddit_id=%s,submission_id=%s', NEW.subreddit_id, NEW.id), errcode = 'EB002';
-        END IF;
-    END IF;
+--
+-- Name: check_req_tag(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
+--
 
-    RETURN NEW;
-END;
+CREATE FUNCTION public.check_req_tag(new_custom_tag character varying, subreddit_id integer) RETURNS boolean
+    LANGUAGE sql
+    AS $$
+    SELECT new_custom_tag IS NOT NULL OR NOT (SELECT req_tag FROM subreddits WHERE id = subreddit_id);
 $$;
 
 
@@ -88,7 +73,9 @@ CREATE TABLE public.submissions (
     reddit_id character varying,
     custom_tag character varying,
     submitted_on timestamp without time zone,
-    flair_id character varying
+    flair_id character varying,
+    CONSTRAINT check_req_flair CHECK (public.check_req_flair(flair_id, subreddit_id)),
+    CONSTRAINT check_req_tag CHECK (public.check_req_tag(custom_tag, subreddit_id))
 );
 
 
@@ -207,19 +194,19 @@ ALTER TABLE ONLY public.works ALTER COLUMN id SET DEFAULT nextval('public.works_
 
 
 --
+-- Name: submissions already_exists; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submissions
+    ADD CONSTRAINT already_exists UNIQUE (work_id, subreddit_id);
+
+
+--
 -- Name: submissions submissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.submissions
     ADD CONSTRAINT submissions_pkey PRIMARY KEY (id);
-
-
---
--- Name: submissions submissions_work_id_subreddit_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.submissions
-    ADD CONSTRAINT submissions_work_id_subreddit_id_key UNIQUE (work_id, subreddit_id);
 
 
 --
@@ -252,13 +239,6 @@ ALTER TABLE ONLY public.works
 
 ALTER TABLE ONLY public.works
     ADD CONSTRAINT works_source_url_key UNIQUE (source_url);
-
-
---
--- Name: submissions check_req_flair_or_tag; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER check_req_flair_or_tag AFTER INSERT OR UPDATE ON public.submissions FOR EACH ROW EXECUTE PROCEDURE public.check_req_flair_or_tag();
 
 
 --
