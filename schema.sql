@@ -16,6 +16,43 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: check_req_flair_or_tag(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_req_flair_or_tag() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+--    NEW RECORD;
+    req_flair BOOL;
+    req_tag BOOL;
+    sub_name VARCHAR;
+    sub_flair_id VARCHAR;
+BEGIN
+--    SELECT * INTO NEW FROM submissions WHERE id = 16;
+
+    IF NEW.flair_id IS NULL THEN
+        SELECT subreddits.req_flair, flair_id, name INTO req_flair, sub_flair_id, sub_name FROM subreddits WHERE id = NEW.subreddit_id;
+        IF req_flair AND sub_flair_id IS NULL THEN
+            RAISE EXCEPTION '/r/% requires flair', sub_name USING detail = 
+                format('subreddit_id=%s,submission_id=%s', NEW.subreddit_id, NEW.id), errcode = 'EB001';
+        END IF;
+    END IF;
+
+    IF NEW.custom_tag IS NULL THEN
+        SELECT subreddits.req_tag, name INTO req_tag, sub_name FROM subreddits WHERE id = NEW.subreddit_id;
+        IF req_tag THEN
+            RAISE EXCEPTION '/r/% requires a tag', sub_name USING detail = 
+                format('subreddit_id=%s,submission_id=%s', NEW.subreddit_id, NEW.id), errcode = 'EB002';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: update_last_submission_on(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -85,7 +122,9 @@ CREATE TABLE public.subreddits (
     tag_series boolean DEFAULT false NOT NULL,
     flair_id character varying,
     rehost boolean DEFAULT true,
-    last_submission_on timestamp without time zone
+    last_submission_on timestamp without time zone,
+    req_flair boolean DEFAULT false NOT NULL,
+    req_tag boolean DEFAULT false NOT NULL
 );
 
 
@@ -216,17 +255,17 @@ ALTER TABLE ONLY public.works
 
 
 --
+-- Name: submissions check_req_flair_or_tag; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER check_req_flair_or_tag AFTER INSERT OR UPDATE ON public.submissions FOR EACH ROW EXECUTE PROCEDURE public.check_req_flair_or_tag();
+
+
+--
 -- Name: submissions update_last_submission_on; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_last_submission_on AFTER INSERT OR UPDATE OF submitted_on ON public.submissions FOR EACH ROW EXECUTE PROCEDURE public.update_last_submission_on();
-
-
---
--- Name: submissions update_last_submission_on_insert; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER update_last_submission_on_insert AFTER INSERT ON public.submissions FOR EACH ROW EXECUTE PROCEDURE public.update_last_submission_on();
 
 
 --
