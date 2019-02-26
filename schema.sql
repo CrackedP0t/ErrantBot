@@ -105,7 +105,7 @@ ALTER SEQUENCE public.submissions_id_seq OWNED BY public.submissions.id;
 
 CREATE TABLE public.subreddits (
     id integer NOT NULL,
-    name character varying,
+    name character varying NOT NULL,
     tag_series boolean DEFAULT false NOT NULL,
     flair_id character varying,
     rehost boolean DEFAULT true,
