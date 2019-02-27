@@ -208,11 +208,5 @@ def list_subs(names):
     click.echo(tabulate(rows, headers=columns))
 
 
-@cli.command()
-def test():
-    reddit = h.connect_reddit()
-    h.subreddit_status("rule34", reddit)
-
-
 if __name__ == "__main__":
     cli()
