@@ -66,7 +66,7 @@ def add(source_url, submissions, title, artist, series, nsfw):
 
     h.upload_to_imgur(db, work_id)
 
-    h.post_all_submissions(db, work_id)
+    h.post_submissions(db, work_id)
 
 
 @cli.command()
@@ -97,7 +97,7 @@ def add_custom(title, artist, source_url, source_image_url, submissions, series,
 
     h.upload_to_imgur(db, work_id)
 
-    h.post_to_all_submissions(db, work_id)
+    h.post_to_submissions(db, work_id)
 
 
 @cli.command()
@@ -130,7 +130,7 @@ def crosspost(work_id, submissions):
 
     h.add_submissions(db, work_id, submissions)
 
-    h.post_all_submissions(db, work_id)
+    h.post_submissions(db, work_id)
 
 
 @cli.command()
@@ -138,7 +138,7 @@ def crosspost(work_id, submissions):
 def retry_post(work_id):
     db = connect_db()
 
-    h.post_all_submissions(db, work_id, True)
+    h.post_submissions(db, work_id)
 
 
 @cli.command()

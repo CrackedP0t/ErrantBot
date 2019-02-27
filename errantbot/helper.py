@@ -55,7 +55,7 @@ def connect_reddit():
     return reddit.reddit
 
 
-def post_submissions(db, work_id, log_existing=False):
+def post_submissions(db, work_id):
     reddit = connect_reddit()
 
     errecho("Posting...")
@@ -66,30 +66,21 @@ def post_submissions(db, work_id, log_existing=False):
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
         source_image_url, name, tag_series, custom_tag, submissions.id,
         COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
-        rehost, last_submission_on,
-        submissions.reddit_id IS NOT NULL AS already_submitted
+        rehost, last_submission_on
         FROM works INNER JOIN submissions ON
-        submissions.work_id = works.id AND works.id = %s
-        INNER JOIN subreddits
-        ON submissions.subreddit_id = subreddits.id""",
+        works.id = %s AND
+        submissions.reddit_id IS NULL AND
+        submissions.work_id = works.id
+        INNER JOIN subreddits ON
+        submissions.subreddit_id = subreddits.id""",
         (work_id,),
     )
 
     rows = cursor.fetchall()
 
     for row in rows:
-        if row["already_submitted"]:
-            if log_existing:
-                errecho(
-                    "\tThis has already been submitted \
-                    to /r/{}; skipped".format(
-                        row["name"]
-                    )
-                )
-            continue
-
         if not row["series"] and row["tag_series"]:
-            errecho("\t/r/{} requires a series; skipped".format(row["name"]))
+            errecho("\t/r/{} requires a series".format(row["name"]))
             continue
 
         if row["last_submission_on"]:
