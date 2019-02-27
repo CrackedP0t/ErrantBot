@@ -4,6 +4,7 @@ import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 import itertools
+from collections import namedtuple
 
 
 def connect_db():
@@ -177,35 +178,38 @@ def _extract(url):
 
 @cli.command()
 @click.argument("names", nargs=-1, type=types.subreddit)
-def list_subs(names):
+@click.option("--ready/--not-ready", "-r/-R", default=None)
+def list_subs(names, ready):
     db = connect_db()
 
-    cursor = db.cursor(cursor_factory=psycopg2.extensions.cursor)
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    if len(names) > 0:
-        where = " WHERE subreddits.name IN %s"
-    else:
+    Opt = namedtuple("Opt", ("check", "cond"))
+
+    opts = (
+        Opt(len(names) > 0, "subreddits.name IN %s"),
+        Opt(ready is True, "last_submission_on < NOW() - INTERVAL '1 day'"),
+        Opt(ready is False, "last_submission_on > NOW() - INTERVAL '1 day'")
+    )
+
+    opts = tuple(filter(lambda opt: opt.check, opts))
+
+    if len(opts) == 0:
         where = ""
+    else:
+        where = " WHERE " + " AND ".join(map(lambda opt: opt.cond, opts))
+
+    query = """SELECT id, name, tag_series, flair_id, rehost, last_submission_on,
+        (SELECT COUNT(*) FROM submissions WHERE subreddit_id = subreddits.id) post_count
+        FROM subreddits{} ORDER BY id""".format(where)
 
     cursor.execute(
-        """SELECT id, name, tag_series, flair_id, rehost, last_submission_on,
-        (SELECT COUNT(*) FROM submissions WHERE subreddit_id = subreddits.id) post_count
-        FROM subreddits{} ORDER BY id""".format(
-            where
-        ),
+        query,
         (names,),
     )
     rows = cursor.fetchall()
 
-    cursor.execute(
-        """SELECT column_name FROM information_schema.columns WHERE
-        table_name='subreddits' ORDER BY ordinal_position"""
-    )
-    columns = itertools.chain(
-        map(lambda col: col[0], cursor.fetchall()), ("post_count",)
-    )
-
-    click.echo(tabulate(rows, headers=columns))
+    click.echo(tabulate(rows, headers="keys"))
 
 
 @cli.command()
