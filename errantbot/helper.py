@@ -8,7 +8,7 @@ import enum
 import psycopg2
 
 
-class Subreddits:
+class Submissions:
     def __len__(self):
         return self.length
 
@@ -40,6 +40,8 @@ def connect_imgur():
 
     imgur.authenticate()
 
+    errecho("\tAuthentication complete")
+
     return imgur
 
 
@@ -53,7 +55,7 @@ def connect_reddit():
     return reddit.reddit
 
 
-def post_to_all_subreddits(db, work_id, log_existing=False):
+def post_submissions(db, work_id, log_existing=False):
     reddit = connect_reddit()
 
     errecho("Posting...")
@@ -187,7 +189,6 @@ def save_work(
     imgur_image_url,
     nsfw,
     source_image_url,
-    subreddits,
 ):
     errecho("Saving to database...")
 
@@ -214,8 +215,6 @@ def save_work(
 
     errecho("\tSaved with id {}".format(work_id))
 
-    add_submissions(db, work_id, subreddits)
-
     return work_id
 
 
@@ -232,12 +231,12 @@ def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require
     db.commit()
 
 
-def add_submissions(db, work_id, subreddits):
-    subreddits_known(db, subreddits.names)
+def add_submissions(db, work_id, submissions):
+    subreddits_known(db, submissions.names)
 
     cursor = db.cursor()
 
-    for triple in subreddits.n_f_t:
+    for triple in submissions.n_f_t:
         try:
             cursor.execute(
                 """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)

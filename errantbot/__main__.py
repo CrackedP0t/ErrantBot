@@ -11,12 +11,16 @@ def connect_db():
 
     secrets = h.get_secrets()["database"]
 
-    return psycopg2.connect(
+    db = psycopg2.connect(
         user=secrets["user"],
         password=secrets["password"],
         dbname=secrets["name"],
         cursor_factory=psycopg2.extras.DictCursor,
     )
+
+    h.errecho("\tConnected")
+
+    return db
 
 
 @click.group()
@@ -26,12 +30,12 @@ def cli():
 
 @cli.command()
 @click.argument("source-url", required=True, type=types.url)
-@click.argument("subreddits", nargs=-1, type=types.submission)
+@click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--title", "-t")
 @click.option("--artist", "-a")
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw", default=None)
-def add(source_url, subreddits, title, artist, series, nsfw):
+def add(source_url, submissions, title, artist, series, nsfw):
     work = extract.auto(source_url)
 
     work = extract.Work(
@@ -43,10 +47,10 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         work.source_url,
     )
 
-    subreddits = h.Subreddits(subreddits)
+    submissions = h.Submissions(submissions)
     db = connect_db()
 
-    row_id = h.save_work(
+    work_id = h.save_work(
         db,
         work.title,
         work.series,
@@ -56,12 +60,13 @@ def add(source_url, subreddits, title, artist, series, nsfw):
         None,
         work.nsfw,
         work.image_url,
-        subreddits,
     )
 
-    h.upload_to_imgur(db, row_id)
+    h.add_submissions(db, work_id, submissions)
 
-    h.post_to_all_subreddits(db, row_id)
+    h.upload_to_imgur(db, work_id)
+
+    h.post_all_submissions(db, work_id)
 
 
 @cli.command()
@@ -69,11 +74,11 @@ def add(source_url, subreddits, title, artist, series, nsfw):
 @click.argument("artist", required=True)
 @click.argument("source-url", type=types.url, required=True)
 @click.argument("source-image-url", type=types.url, required=True)
-@click.argument("subreddits", nargs=-1, type=types.submission)
+@click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw")
-def add_custom(title, artist, source_url, source_image_url, subreddits, series, nsfw):
-    subreddits = h.Subreddits(subreddits)
+def add_custom(title, artist, source_url, source_image_url, submissions, series, nsfw):
+    submissions = h.Submissions(submissions)
     db = connect_db()
 
     work_id = h.save_work(
@@ -86,12 +91,13 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
         None,
         nsfw,
         source_image_url,
-        subreddits,
     )
+
+    h.add_submissions(db, work_id, submissions)
 
     h.upload_to_imgur(db, work_id)
 
-    h.post_to_all_subreddits(db, work_id)
+    h.post_to_all_submissions(db, work_id)
 
 
 @cli.command()
@@ -99,7 +105,7 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 @click.option("--tag-series/--no-tag-series", "-s/-S", default=False)
 @click.option("--flair-id", "-f", type=types.flair_id)
 @click.option("--rehost/--no-rehost", "-r/-R", default=True)
-@click.option("--require-flair/--no-require-flair", "-r/-R", default=False)
+@click.option("--require-flair/--no-require-flair", "-q/-Q", default=False)
 @click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
 def add_sub(name, tag_series, flair_id, rehost, require_flair, require_tag):
     reddit = h.connect_reddit()
@@ -116,15 +122,15 @@ def add_sub(name, tag_series, flair_id, rehost, require_flair, require_tag):
 
 @cli.command()
 @click.argument("work-id", type=int, required=True)
-@click.argument("subreddits", nargs=-1, type=types.submission)
-def crosspost(work_id, subreddits):
+@click.argument("submissions", nargs=-1, type=types.submission)
+def crosspost(work_id, submissions):
     db = connect_db()
 
-    subreddits = h.Subreddits(subreddits)
+    submissions = h.Submissions(submissions)
 
-    h.add_submissions(db, work_id, subreddits)
+    h.add_submissions(db, work_id, submissions)
 
-    h.post_to_all_subreddits(db, work_id)
+    h.post_all_submissions(db, work_id)
 
 
 @cli.command()
@@ -132,7 +138,7 @@ def crosspost(work_id, subreddits):
 def retry_post(work_id):
     db = connect_db()
 
-    h.post_to_all_subreddits(db, work_id, True)
+    h.post_all_submissions(db, work_id, True)
 
 
 @cli.command()
