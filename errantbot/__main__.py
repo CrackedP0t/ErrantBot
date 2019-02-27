@@ -7,7 +7,7 @@ import itertools
 
 
 def connect_db():
-    click.echo("Connecting to database...", err=True)
+    h.errecho("Connecting to database...")
 
     secrets = h.get_secrets()["database"]
 
