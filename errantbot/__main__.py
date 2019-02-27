@@ -130,7 +130,7 @@ def crosspost(work_id, submissions):
 
     h.add_submissions(db, work_id, submissions)
 
-    h.post_submissions(db, work_id)
+    h.post_submissions(db, work_id, submissions)
 
 
 @cli.command()

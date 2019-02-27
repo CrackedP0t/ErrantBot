@@ -55,7 +55,7 @@ def connect_reddit():
     return reddit.reddit
 
 
-def post_submissions(db, work_id):
+def post_submissions(db, work_id, submissions=None):
     reddit = connect_reddit()
 
     errecho("Posting...")
@@ -72,8 +72,9 @@ def post_submissions(db, work_id):
         submissions.reddit_id IS NULL AND
         submissions.work_id = works.id
         INNER JOIN subreddits ON
-        submissions.subreddit_id = subreddits.id""",
-        (work_id,),
+        submissions.subreddit_id = subreddits.id"""
+        + (" AND subreddits.name IN %s" if submissions else ""),
+        (work_id, submissions.names) if submissions else (work_id,),
     )
 
     rows = cursor.fetchall()
@@ -223,11 +224,12 @@ def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require
 
 
 def add_submissions(db, work_id, submissions):
-    subreddits_known(db, submissions.names)
-
     cursor = db.cursor()
 
     for triple in submissions.n_f_t:
+        if not subreddit_known(db, triple[0]):
+            errecho("\t/r/{} is unknown".format(triple[0]))
+            continue
         try:
             cursor.execute(
                 """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)
@@ -243,36 +245,26 @@ def add_submissions(db, work_id, submissions):
                 "already_exists": "/r/{} already has this work",
             }.get(e.diag.constraint_name, None)
 
-            if msg:
-                errecho("\t" + msg.format(triple[0]))
-                db.rollback()
-            else:
+            if not msg:
                 raise e
+
+            errecho("\t" + msg.format(triple[0]))
+            db.rollback()
         else:
             db.commit()
 
 
-def subreddits_known(db, subreddit_names):
+def subreddit_known(db, subreddit_name):
     cursor = db.cursor()
 
     cursor.execute(
-        """WITH prov (name) AS ( VALUES %s )
-        SELECT name FROM prov EXCEPT select name from subreddits""",
-        (subreddit_names,),
+        """SELECT id FROM subreddits WHERE name = %s""",
+        (subreddit_name,),
     )
 
-    badsubs = cursor.fetchall()
+    row = cursor.fetchone()
 
-    n_bad = len(badsubs)
-
-    if n_bad > 0:
-        raise click.ClickException(
-            "{} {} unknown. Use 'add-sub' to register {}.".format(
-                ", ".join(map(lambda sub: "/r/" + sub["name"], badsubs)),
-                "are" if n_bad > 1 else "is",
-                "them" if n_bad > 1 else "it",
-            )
-        )
+    return bool(row)
 
 
 class SubStatus(enum.Enum):
@@ -292,8 +284,8 @@ def subreddit_or_status(reddit, name):
 
     if not status:
         return status
-    else:
-        return subreddit
+
+    return subreddit
 
 
 def subreddit_status(subreddit, reddit=None):
