@@ -56,10 +56,6 @@ def connect_reddit():
 
 
 def post_submissions(db, work_id, submissions=None):
-    reddit = connect_reddit()
-
-    errecho("Posting...")
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -78,6 +74,13 @@ def post_submissions(db, work_id, submissions=None):
     )
 
     rows = cursor.fetchall()
+
+    if len(rows) == 0:
+        return
+
+    reddit = connect_reddit()
+
+    errecho("Posting...")
 
     for row in rows:
         if not row["series"] and row["tag_series"]:
@@ -224,6 +227,8 @@ def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require
 
 
 def add_submissions(db, work_id, submissions):
+    errecho("Saving to database...")
+
     cursor = db.cursor()
 
     for triple in submissions.n_f_t:
