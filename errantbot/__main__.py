@@ -96,10 +96,12 @@ def add_custom(title, artist, source_url, source_image_url, subreddits, series, 
 
 @cli.command()
 @click.argument("name", required=True, type=types.subreddit)
-@click.option("--tag-series/--no-tag-series", "-t/-T", default=False)
+@click.option("--tag-series/--no-tag-series", "-s/-S", default=False)
 @click.option("--flair-id", "-f", type=types.flair_id)
 @click.option("--rehost/--no-rehost", "-r/-R", default=True)
-def add_sub(name, tag_series, flair_id, rehost):
+@click.option("--require-flair/--no-require-flair", "-r/-R", default=False)
+@click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
+def add_sub(name, tag_series, flair_id, rehost, require_flair, require_tag):
     reddit = h.connect_reddit()
 
     status = h.subreddit_status(name, reddit)
@@ -109,7 +111,7 @@ def add_sub(name, tag_series, flair_id, rehost):
 
     db = connect_db()
 
-    h.add_subreddit(db, name, tag_series, flair_id, rehost)
+    h.add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require_tag)
 
 
 @cli.command()

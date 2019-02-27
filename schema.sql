@@ -16,24 +16,24 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: check_req_flair(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: check_require_flair(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.check_req_flair(new_flair_id character varying, subreddit_id integer) RETURNS boolean
+CREATE FUNCTION public.check_require_flair(new_flair_id character varying, subreddit_id integer) RETURNS boolean
     LANGUAGE sql
     AS $$
-    SELECT new_flair_id IS NOT NULL OR NOT (SELECT req_flair FROM subreddits WHERE id = subreddit_id AND flair_id IS NULL);
+    SELECT new_flair_id IS NOT NULL OR NOT (SELECT require_flair FROM subreddits WHERE id = subreddit_id AND flair_id IS NULL);
 $$;
 
 
 --
--- Name: check_req_tag(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: check_require_tag(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.check_req_tag(new_custom_tag character varying, subreddit_id integer) RETURNS boolean
+CREATE FUNCTION public.check_require_tag(new_custom_tag character varying, subreddit_id integer) RETURNS boolean
     LANGUAGE sql
     AS $$
-    SELECT new_custom_tag IS NOT NULL OR NOT (SELECT req_tag FROM subreddits WHERE id = subreddit_id);
+    SELECT new_custom_tag IS NOT NULL OR NOT (SELECT require_tag FROM subreddits WHERE id = subreddit_id);
 $$;
 
 
@@ -74,8 +74,8 @@ CREATE TABLE public.submissions (
     custom_tag character varying,
     submitted_on timestamp without time zone,
     flair_id character varying,
-    CONSTRAINT check_req_flair CHECK (public.check_req_flair(flair_id, subreddit_id)),
-    CONSTRAINT check_req_tag CHECK (public.check_req_tag(custom_tag, subreddit_id))
+    CONSTRAINT check_require_flair CHECK (public.check_require_flair(flair_id, subreddit_id)),
+    CONSTRAINT check_require_tag CHECK (public.check_require_tag(custom_tag, subreddit_id))
 );
 
 
@@ -110,8 +110,8 @@ CREATE TABLE public.subreddits (
     flair_id character varying,
     rehost boolean DEFAULT true,
     last_submission_on timestamp without time zone,
-    req_flair boolean DEFAULT false NOT NULL,
-    req_tag boolean DEFAULT false NOT NULL
+    require_flair boolean DEFAULT false NOT NULL,
+    require_tag boolean DEFAULT false NOT NULL
 );
 
 

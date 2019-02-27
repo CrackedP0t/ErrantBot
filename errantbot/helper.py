@@ -219,14 +219,15 @@ def save_work(
     return work_id
 
 
-def add_subreddit(db, name, tag_series, flair_id, rehost):
+def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require_tag):
     cursor = db.cursor()
 
     cursor.execute(
-        """INSERT INTO subreddits (name, tag_series, flair_id, rehost)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s, rehost = %s""",
-        (name, tag_series, flair_id, rehost, tag_series, flair_id, rehost),
+        """INSERT INTO subreddits (name, tag_series, flair_id,
+        rehost, require_flair, require_tag) VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s, rehost = %s,
+        require_flair = %s, require_tag = %s""",
+        (name,) + (tag_series, flair_id, rehost, require_flair, require_tag) * 2
     )
     db.commit()
 
@@ -247,8 +248,8 @@ def add_submissions(db, work_id, subreddits):
             )
         except psycopg2.IntegrityError as e:
             msg = {
-                "check_req_flair": "/r/{} requires a flair",
-                "check_req_tag": "/r/{} requires a tag",
+                "check_require_flair": "/r/{} requires a flair",
+                "check_require_tag": "/r/{} requires a tag",
                 "already_exists": "/r/{} already has this work",
             }.get(e.diag.constraint_name, None)
 
