@@ -221,7 +221,7 @@ def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require
         rehost, require_flair, require_tag) VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s, rehost = %s,
         require_flair = %s, require_tag = %s""",
-        (name,) + (tag_series, flair_id, rehost, require_flair, require_tag) * 2
+        (name,) + (tag_series, flair_id, rehost, require_flair, require_tag) * 2,
     )
     db.commit()
 
@@ -262,10 +262,7 @@ def add_submissions(db, work_id, submissions):
 def subreddit_known(db, subreddit_name):
     cursor = db.cursor()
 
-    cursor.execute(
-        """SELECT id FROM subreddits WHERE name = %s""",
-        (subreddit_name,),
-    )
+    cursor.execute("""SELECT id FROM subreddits WHERE name = %s""", (subreddit_name,))
 
     row = cursor.fetchone()
 
