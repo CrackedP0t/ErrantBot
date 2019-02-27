@@ -146,14 +146,16 @@ def upload_to_imgur(db, work_id):
     row = cursor.fetchone()
 
     if row is None:
-        raise click.ClickException("Work id {} does not exist".format(work_id))
+        errecho("\tWork id {} does not exist".format(work_id))
+        return
 
     if row["imgur_image_url"]:
-        raise click.ClickException(
-            "Work id {} has already been uploaded at {}".format(
+        errecho(
+            "\tWork id {} has already been uploaded at {}".format(
                 work_id, row["imgur_image_url"]
             )
         )
+        return
 
     resp = imgur.upload_url(
         row["source_image_url"],
