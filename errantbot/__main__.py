@@ -208,5 +208,21 @@ def list_subs(names):
     click.echo(tabulate(rows, headers=columns))
 
 
+@cli.command()
+def list_works():
+    db = connect_db()
+
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cursor.execute(
+        """SELECT id, artist, title, series, nsfw, source_url, imgur_image_url
+        FROM works"""
+    )
+
+    rows = cursor.fetchall()
+
+    click.echo(tabulate(rows, headers="keys"))
+
+
 if __name__ == "__main__":
     cli()
