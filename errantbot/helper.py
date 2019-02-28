@@ -209,7 +209,7 @@ def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require
 
 
 def add_submissions(db, work_id, submissions):
-    errecho("Saving to database...")
+    errecho("Adding submissions...")
 
     cursor = db.cursor()
 
@@ -238,6 +238,7 @@ def add_submissions(db, work_id, submissions):
             errecho("\t" + msg.format(triple[0]))
             db.rollback()
         else:
+            errecho("\tAdded to /r/{}".format(triple[0]))
             db.commit()
 
 
