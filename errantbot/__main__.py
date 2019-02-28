@@ -204,6 +204,7 @@ def list_subs(names, ready):
     FROM subreddits{} ORDER BY id""".format(
         where
     )
+    rows = cursor.fetchall()
 
     cursor.execute(query, (names,))
     rows = cursor.fetchall()
