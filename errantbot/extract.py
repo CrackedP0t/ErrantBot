@@ -109,7 +109,7 @@ def deviantart(page_url):
 
     data = oe_req.json()
 
-    fullsize = regex.compile(".*?\\.jpg")
+    fullsize = regex.compile(r".*?\.(?:jpg|png)")
 
     return Work(
         data["title"],
