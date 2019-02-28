@@ -3,7 +3,6 @@ from . import extract, helper as h, paramtypes as types
 import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
-import itertools
 from collections import namedtuple
 
 
@@ -189,7 +188,7 @@ def list_subs(names, ready):
     opts = (
         Opt(len(names) > 0, "subreddits.name IN %s"),
         Opt(ready is True, "last_submission_on < NOW() - INTERVAL '1 day'"),
-        Opt(ready is False, "last_submission_on > NOW() - INTERVAL '1 day'")
+        Opt(ready is False, "last_submission_on > NOW() - INTERVAL '1 day'"),
     )
 
     opts = tuple(filter(lambda opt: opt.check, opts))
