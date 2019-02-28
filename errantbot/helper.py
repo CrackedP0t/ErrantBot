@@ -176,35 +176,15 @@ def upload_to_imgur(db, work_id):
     errecho("\tUploaded at {}".format(data["link"]))
 
 
-def save_work(
-    db,
-    title,
-    series,
-    artist,
-    source_url,
-    imgur_id,
-    imgur_image_url,
-    nsfw,
-    source_image_url,
-):
+def save_work(db, title, series, artist, source_url, nsfw, source_image_url):
     errecho("Saving to database...")
 
     cursor = db.cursor()
 
     cursor.execute(
-        """INSERT INTO works (title, series, artist, source_url,
-            imgur_id, imgur_image_url, nsfw, source_image_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;""",
-        (
-            title,
-            series,
-            artist,
-            source_url,
-            imgur_id,
-            imgur_image_url,
-            nsfw,
-            source_image_url,
-        ),
+        """INSERT INTO works (title, series, artist, source_url, nsfw, source_image_url)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;""",
+        (title, series, artist, source_url, nsfw, source_image_url),
     )
     db.commit()
 

@@ -56,8 +56,6 @@ def add(source_url, submissions, title, artist, series, nsfw):
         work.series,
         work.artist,
         work.source_url,
-        None,
-        None,
         work.nsfw,
         work.image_url,
     )
@@ -81,9 +79,7 @@ def add_custom(title, artist, source_url, source_image_url, submissions, series,
     submissions = h.Submissions(submissions)
     db = connect_db()
 
-    work_id = h.save_work(
-        db, title, series, artist, source_url, None, None, nsfw, source_image_url
-    )
+    work_id = h.save_work(db, title, series, artist, source_url, nsfw, source_image_url)
 
     h.add_submissions(db, work_id, submissions)
 
