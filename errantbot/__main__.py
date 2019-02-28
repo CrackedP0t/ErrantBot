@@ -85,7 +85,7 @@ def add_custom(title, artist, source_url, source_image_url, submissions, series,
 
     h.upload_to_imgur(db, work_id)
 
-    h.post_to_submissions(db, work_id)
+    h.post_submissions(db, work_id)
 
 
 @cli.command()
