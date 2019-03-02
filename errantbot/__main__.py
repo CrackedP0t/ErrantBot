@@ -122,19 +122,21 @@ def crosspost(work_id, submissions):
 
 
 @cli.command()
-@click.argument("work-id", type=int, required=True)
-def retry_post(work_id):
+@click.argument("work-ids", type=int, nargs=-1)
+def retry_post(work_ids):
     db = connect_db()
 
-    h.post_submissions(db, work_id)
+    for work_id in work_ids:
+        h.post_submissions(db, work_id)
 
 
 @cli.command()
-@click.argument("work-id", type=int, required=True)
-def retry_upload(work_id):
+@click.argument("work-ids", type=int, nargs=-1)
+def retry_upload(work_ids):
     db = connect_db()
 
-    h.upload_to_imgur(db, work_id)
+    for work_id in work_ids:
+        h.upload_to_imgur(db, work_id)
 
 
 @cli.command()
