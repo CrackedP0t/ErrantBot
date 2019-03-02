@@ -55,7 +55,58 @@ def connect_reddit():
     return reddit.reddit
 
 
-def post_submissions(db, work_id, submissions=None):
+def do_post(db, reddit, row):
+    cursor = db.cursor()
+
+    if not row["series"] and row["tag_series"]:
+        errecho("\t/r/{} requires a series".format(row["name"]))
+        return
+
+    if row["last_submission_on"]:
+        since = datetime.utcnow() - row["last_submission_on"]
+        if since < timedelta(days=1):
+            wait = timedelta(days=1) - since
+            wait = timedelta(wait.days, wait.seconds)
+            errecho(
+                "\tSubmitted to /r/{} less than one day ago; "
+                "you can try again in {}".format(row["name"], wait)
+            )
+
+            return
+
+    sub = reddit.subreddit(row["name"])
+
+    title = "{title} ({artist}){series_tag}{tag}".format(
+        series_tag=" [" + row["series"] + "]" if row["tag_series"] else "",
+        tag=" " + row["custom_tag"] if row["custom_tag"] else "",
+        **row
+    )
+
+    url = row["imgur_image_url" if row["rehost"] else "source_image_url"]
+
+    submission = sub.submit(title, url=url, flair_id=row["flair_id"])
+
+    errecho(
+        "\tSubmitted to /r/{} at https://reddit.com{}".format(
+            row["name"], submission.permalink
+        )
+    )
+
+    if row["nsfw"]:
+        submission.mod.nsfw()
+
+    submission.reply("[Source]({})".format(row["source_url"]))
+
+    cursor.execute(
+        """UPDATE submissions SET reddit_id = %s, submitted_on = to_timestamp(%s)
+        WHERE id = %s""",
+        (submission.id, int(submission.created_utc), row["id"]),
+    )
+
+    db.commit()
+
+
+def post_submissions(db, work_ids, submissions=None):
     cursor = db.cursor()
 
     cursor.execute(
@@ -64,13 +115,13 @@ def post_submissions(db, work_id, submissions=None):
         COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
         rehost, last_submission_on
         FROM works INNER JOIN submissions ON
-        works.id = %s AND
+        works.id IN %s AND
         submissions.reddit_id IS NULL AND
         submissions.work_id = works.id
         INNER JOIN subreddits ON
         submissions.subreddit_id = subreddits.id"""
         + (" AND subreddits.name IN %s" if submissions else ""),
-        (work_id, submissions.names) if submissions else (work_id,),
+        (work_ids, submissions.names) if submissions else (work_ids,),
     )
 
     rows = cursor.fetchall()
@@ -83,52 +134,35 @@ def post_submissions(db, work_id, submissions=None):
     errecho("Posting...")
 
     for row in rows:
-        if not row["series"] and row["tag_series"]:
-            errecho("\t/r/{} requires a series".format(row["name"]))
-            continue
+        do_post(db, reddit, row)
 
-        if row["last_submission_on"]:
-            since = datetime.utcnow() - row["last_submission_on"]
-            if since < timedelta(days=1):
-                wait = timedelta(days=1) - since
-                wait = timedelta(wait.days, wait.seconds)
-                errecho(
-                    "\tSubmitted to /r/{} less than one day ago; "
-                    "you can try again in {}".format(row["name"], wait)
-                )
 
-                continue
+def post_all_submissions(db):
+    cursor = db.cursor()
 
-        sub = reddit.subreddit(row["name"])
+    cursor.execute(
+        """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
+        source_image_url, name, tag_series, custom_tag, submissions.id,
+        COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
+        rehost, last_submission_on
+        FROM works INNER JOIN submissions ON
+        submissions.reddit_id IS NULL AND
+        submissions.work_id = works.id
+        INNER JOIN subreddits ON
+        submissions.subreddit_id = subreddits.id"""
+    )
 
-        title = "{title} ({artist}){series_tag}{tag}".format(
-            series_tag=" [" + row["series"] + "]" if row["tag_series"] else "",
-            tag=" " + row["custom_tag"] if row["custom_tag"] else "",
-            **row
-        )
+    rows = cursor.fetchall()
 
-        url = row["imgur_image_url" if row["rehost"] else "source_image_url"]
+    if len(rows) == 0:
+        return
 
-        submission = sub.submit(title, url=url, flair_id=row["flair_id"])
+    reddit = connect_reddit()
 
-        errecho(
-            "\tSubmitted to /r/{} at https://reddit.com{}".format(
-                row["name"], submission.permalink
-            )
-        )
+    errecho("Posting...")
 
-        if row["nsfw"]:
-            submission.mod.nsfw()
-
-        submission.reply("[Source]({})".format(row["source_url"]))
-
-        cursor.execute(
-            """UPDATE submissions SET reddit_id = %s, submitted_on = to_timestamp(%s)
-            WHERE id = %s""",
-            (submission.id, int(submission.created_utc), row["id"]),
-        )
-
-        db.commit()
+    for row in rows:
+        do_post(db, reddit, row)
 
 
 def upload_to_imgur(db, work_id):
