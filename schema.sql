@@ -242,13 +242,6 @@ ALTER TABLE ONLY public.works
 
 
 --
--- Name: submissions update_last_submission_on; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER update_last_submission_on AFTER INSERT OR UPDATE OF submitted_on ON public.submissions FOR EACH ROW EXECUTE PROCEDURE public.update_last_submission_on();
-
-
---
 -- Name: submissions submissions_subreddit_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
