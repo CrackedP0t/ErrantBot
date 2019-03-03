@@ -16,6 +16,7 @@ psycopg2-binary = "*"
 pixivpy = "*"
 tabulate = "*"
 validators = "*"
+grappa = "*"
 
 [dev-packages]
 

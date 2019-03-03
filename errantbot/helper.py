@@ -6,6 +6,7 @@ from prawcore import exceptions
 import praw
 import enum
 import psycopg2
+from grappa import should
 
 
 class Submissions:
@@ -56,6 +57,24 @@ def connect_reddit():
 
 
 def do_post(db, reddit, row):
+    row | should.have.keys(
+        "series",
+        "tag_series",
+        "name",
+        "title",
+        "artist",
+        "last_submission_on",
+        "name",
+        "custom_tag",
+        "imgur_image_url",
+        "rehost",
+        "source_image_url",
+        "flair_id",
+        "nsfw",
+        "source_url",
+        "id",
+    )
+
     cursor = db.cursor()
 
     if not row["series"] and row["tag_series"]:
@@ -123,7 +142,7 @@ def post_submissions(db, work_ids=None, submissions=None, all=False):
         submissions.subreddit_id = subreddits.id"""
         + (" AND works.id = %s" if not all else "")
         + (" AND subreddits.name IN %s" if submissions else ""),
-        (work_ids, submissions.names) if submissions else (work_ids,)
+        (work_ids, submissions.names) if submissions else (work_ids,),
     )
 
     rows = cursor.fetchall()
