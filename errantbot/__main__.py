@@ -129,11 +129,11 @@ def retry_posts(work_ids):
     h.post_submissions(db, work_ids)
 
 
-@click.command()
+@cli.command()
 def retry_all_posts():
     db = connect_db()
 
-    h.post_all_submissions(db)
+    h.post_submissions(db, all=True)
 
 
 @cli.command()

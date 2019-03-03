@@ -106,8 +106,10 @@ def do_post(db, reddit, row):
     db.commit()
 
 
-def post_submissions(db, work_ids, submissions=None):
+def post_submissions(db, work_ids=None, submissions=None, all=False):
     cursor = db.cursor()
+
+    submissions = submissions and not all
 
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
@@ -115,41 +117,13 @@ def post_submissions(db, work_ids, submissions=None):
         COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
         rehost, last_submission_on
         FROM works INNER JOIN submissions ON
-        works.id IN %s AND
         submissions.reddit_id IS NULL AND
         submissions.work_id = works.id
         INNER JOIN subreddits ON
         submissions.subreddit_id = subreddits.id"""
+        + (" AND works.id = %s" if not all else "")
         + (" AND subreddits.name IN %s" if submissions else ""),
-        (work_ids, submissions.names) if submissions else (work_ids,),
-    )
-
-    rows = cursor.fetchall()
-
-    if len(rows) == 0:
-        return
-
-    reddit = connect_reddit()
-
-    errecho("Posting...")
-
-    for row in rows:
-        do_post(db, reddit, row)
-
-
-def post_all_submissions(db):
-    cursor = db.cursor()
-
-    cursor.execute(
-        """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
-        source_image_url, name, tag_series, custom_tag, submissions.id,
-        COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
-        rehost, last_submission_on
-        FROM works INNER JOIN submissions ON
-        submissions.reddit_id IS NULL AND
-        submissions.work_id = works.id
-        INNER JOIN subreddits ON
-        submissions.subreddit_id = subreddits.id"""
+        (work_ids, submissions.names) if submissions else (work_ids,)
     )
 
     rows = cursor.fetchall()
