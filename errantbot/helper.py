@@ -6,6 +6,7 @@ from prawcore import exceptions
 import praw
 import enum
 import psycopg2
+from psycopg2 import sql
 
 
 def has_keys(d, l):
@@ -59,6 +60,18 @@ def connect_reddit():
     reddit.authenticate()
 
     return reddit.reddit
+
+
+def get_last(db, table):
+    cursor = db.cursor()
+
+    cursor.execute(
+        sql.SQL("SELECT id FROM {} ORDER BY id DESC LIMIT 1").format(
+            sql.Identifier(table)
+        )
+    )
+
+    return cursor.fetchone()["id"]
 
 
 def do_post(db, reddit, row):
@@ -133,21 +146,16 @@ def do_post(db, reddit, row):
     db.commit()
 
 
-def post_submissions(db, work_ids=tuple(), submissions=None, all=False, last=False):
+def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
     cursor = db.cursor()
 
+    work_ids = list(work_ids)
+
+    if submissions:
+        submissions = list(submissions)
+
     if last:
-        cursor.execute("""
-        SELECT id FROM works ORDER BY id DESC LIMIT 1
-        """)
-
-        work_ids = tuple(work_ids + (cursor.fetchone()["id"],))
-    else:
-        work_ids = tuple(work_ids)
-
-    if len(work_ids) == 0 and not all:
-        errecho("No works to post")
-        return
+        work_ids.append(get_last(db, "works"))
 
     submissions = submissions and not all
 
@@ -161,14 +169,15 @@ def post_submissions(db, work_ids=tuple(), submissions=None, all=False, last=Fal
         submissions.work_id = works.id
         INNER JOIN subreddits ON
         submissions.subreddit_id = subreddits.id"""
-        + (" AND works.id IN %s" if not all else "")
-        + (" AND subreddits.name IN %s" if submissions else ""),
+        + (" AND works.id = ANY(%s)" if not all else "")
+        + (" AND subreddits.name = ANY(%s)" if submissions else ""),
         (work_ids, submissions.names) if submissions else (work_ids,),
     )
 
     rows = cursor.fetchall()
 
     if len(rows) == 0:
+        errecho("No works require posting")
         return
 
     reddit = connect_reddit()
@@ -179,49 +188,48 @@ def post_submissions(db, work_ids=tuple(), submissions=None, all=False, last=Fal
         do_post(db, reddit, row)
 
 
-def upload_to_imgur(db, work_id):
-    imgur = connect_imgur()
+def upload_to_imgur(db, work_ids=[], last=False):
+    work_ids = list(work_ids)
 
-    errecho("Uploading to Imgur...")
+    if last:
+        work_ids.append(get_last(db, "works"))
 
     cursor = db.cursor()
 
     cursor.execute(
-        """SELECT title, artist, source_image_url, source_url, imgur_image_url
-        FROM works WHERE id=%s""",
-        (work_id,),
+        """SELECT title, artist, source_image_url, source_url, imgur_image_url, id
+        FROM works WHERE id = ANY(%s) AND imgur_id IS NULL""",
+        (work_ids,),
     )
-    row = cursor.fetchone()
 
-    if row is None:
-        errecho("\tWork id {} does not exist".format(work_id))
+    rows = cursor.fetchall()
+
+    if len(rows) == 0:
+        errecho("No works require uploading")
         return
 
-    if row["imgur_image_url"]:
-        errecho(
-            "\tWork id {} has already been uploaded at {}".format(
-                work_id, row["imgur_image_url"]
-            )
+    imgur = connect_imgur()
+
+    errecho("Uploading to Imgur...")
+
+    for row in rows:
+        resp = imgur.upload_url(
+            row["source_image_url"],
+            "{title} ({artist})".format(**row),
+            "Source: {source_url}".format(**row),
         )
-        return
 
-    resp = imgur.upload_url(
-        row["source_image_url"],
-        "{title} ({artist})".format(**row),
-        "Source: {source_url}".format(**row),
-    )
+        resp.raise_for_status()
 
-    resp.raise_for_status()
+        data = resp.json()["data"]
 
-    data = resp.json()["data"]
+        cursor.execute(
+            """UPDATE works SET imgur_id=%s, imgur_image_url=%s WHERE id=%s""",
+            (data["id"], data["link"], row["id"]),
+        )
+        db.commit()
 
-    cursor.execute(
-        """UPDATE works SET imgur_id=%s, imgur_image_url=%s WHERE id=%s""",
-        (data["id"], data["link"], work_id),
-    )
-    db.commit()
-
-    errecho("\tUploaded at {}".format(data["link"]))
+        errecho("\tUploaded at {}".format(data["link"]))
 
 
 def save_work(db, title, series, artist, source_url, nsfw, source_image_url):

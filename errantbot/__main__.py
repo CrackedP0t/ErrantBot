@@ -139,11 +139,11 @@ def retry_all_posts():
 
 @cli.command()
 @click.argument("work-ids", type=int, nargs=-1)
-def retry_upload(work_ids):
+@click.option("--last", "-l", is_flag=True)
+def retry_upload(work_ids, last):
     db = connect_db()
 
-    for work_id in work_ids:
-        h.upload_to_imgur(db, work_id)
+    h.upload_to_imgur(db, work_ids, last=last)
 
 
 @cli.command()
