@@ -6,7 +6,12 @@ from prawcore import exceptions
 import praw
 import enum
 import psycopg2
-from grappa import should
+
+
+def has_keys(d, l):
+    for k in l:
+        if k not in d:
+            raise ValueError("Key {} not found in row".format(k))
 
 
 class Submissions:
@@ -57,22 +62,25 @@ def connect_reddit():
 
 
 def do_post(db, reddit, row):
-    row | should.have.keys(
-        "series",
-        "tag_series",
-        "name",
-        "title",
-        "artist",
-        "last_submission_on",
-        "name",
-        "custom_tag",
-        "imgur_image_url",
-        "rehost",
-        "source_image_url",
-        "flair_id",
-        "nsfw",
-        "source_url",
-        "id",
+    has_keys(
+        row,
+        (
+            "series",
+            "tag_series",
+            "name",
+            "title",
+            "artist",
+            "last_submission_on",
+            "name",
+            "custom_tag",
+            "imgur_image_url",
+            "rehost",
+            "source_image_url",
+            "flair_id",
+            "nsfw",
+            "source_url",
+            "id",
+        ),
     )
 
     cursor = db.cursor()
