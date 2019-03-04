@@ -123,10 +123,11 @@ def crosspost(work_id, submissions):
 
 @cli.command()
 @click.argument("work-ids", type=int, nargs=-1)
-def retry_post(work_ids):
+@click.option("--last", "-l", is_flag=True)
+def retry_post(work_ids, last):
     db = connect_db()
 
-    h.post_submissions(db, work_ids)
+    h.post_submissions(db, work_ids, last=last)
 
 
 @cli.command()

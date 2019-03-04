@@ -7,7 +7,6 @@ from pixivpy3 import AppPixivAPI
 from bs4 import BeautifulSoup
 import click
 from . import helper as h
-from pprint import pprint
 
 
 Work = namedtuple(

@@ -133,8 +133,21 @@ def do_post(db, reddit, row):
     db.commit()
 
 
-def post_submissions(db, work_ids=None, submissions=None, all=False):
+def post_submissions(db, work_ids=tuple(), submissions=None, all=False, last=False):
     cursor = db.cursor()
+
+    if last:
+        cursor.execute("""
+        SELECT id FROM works ORDER BY id DESC LIMIT 1
+        """)
+
+        work_ids = tuple(work_ids + (cursor.fetchone()["id"],))
+    else:
+        work_ids = tuple(work_ids)
+
+    if len(work_ids) == 0 and not all:
+        errecho("No works to post")
+        return
 
     submissions = submissions and not all
 
@@ -148,7 +161,7 @@ def post_submissions(db, work_ids=None, submissions=None, all=False):
         submissions.work_id = works.id
         INNER JOIN subreddits ON
         submissions.subreddit_id = subreddits.id"""
-        + (" AND works.id = %s" if not all else "")
+        + (" AND works.id IN %s" if not all else "")
         + (" AND subreddits.name IN %s" if submissions else ""),
         (work_ids, submissions.names) if submissions else (work_ids,),
     )
