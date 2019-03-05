@@ -47,11 +47,9 @@ CREATE FUNCTION public.update_last_submission_on() RETURNS trigger
 DECLARE
     old_last_post TIMESTAMP;
 BEGIN
-    SELECT last_submission_on INTO old_last_post FROM subreddits WHERE id = NEW.subreddit_id;
-
-    IF old_last_post IS NULL OR old_last_post < NEW.submitted_on THEN
-        UPDATE subreddits SET last_submission_on = NEW.submitted_on WHERE id = NEW.subreddit_id;
-    END IF;
+    UPDATE subreddits SET last_submission_on = 
+        (SELECT submitted_on FROM submissions WHERE subreddit_id = NEW.subreddit_id ORDER BY submitted_on DESC NULLS LAST LIMIT 1)
+        WHERE id = NEW.subreddit_id;
 
     RETURN NEW;
 END;
