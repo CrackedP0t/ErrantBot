@@ -14,7 +14,7 @@ Work = namedtuple(
 )
 
 
-def artstation(page_url):
+def artstation(page_url, index):
     parsed = urlparse(page_url)
 
     ident = regex.search(r"([^/]*)\/?$", parsed.path)[0]
@@ -47,7 +47,7 @@ def artstation(page_url):
     return Work(title, clean_artist, None, nsfw, image_url, page_url)
 
 
-def pixiv(page_url):
+def pixiv(page_url, index):
     parsed = urlparse(page_url)
     query = parse_qs(parsed.query)
 
@@ -67,12 +67,12 @@ def pixiv(page_url):
         data["x_restrict"] > 0,
         data["meta_single_page"]["original_image_url"]
         if len(data["meta_pages"]) == 0
-        else data["meta_pages"][0]["image_urls"]["original"],
+        else data["meta_pages"][index]["image_urls"]["original"],
         page_url,
     )
 
 
-def hentai_foundry(page_url):
+def hentai_foundry(page_url, index):
     res = requests.get(page_url + "?enterAgree=1")
 
     res.raise_for_status()
@@ -99,7 +99,7 @@ def hentai_foundry(page_url):
     return Work(title, artist, series, nsfw, image_url, page_url)
 
 
-def deviantart(page_url):
+def deviantart(page_url, index):
     oe_req = requests.get(
         "https://backend.deviantart.com/oembed?url={}".format(quote(page_url))
     )
@@ -123,7 +123,7 @@ def deviantart(page_url):
 # Note: Due to FurAffinity's system, in order to access NSFW images we need to use
 # the user's cookies taken from their browser.
 # Therefore, FurAffinity integration will probably break a lot.
-def furaffinity(page_url):
+def furaffinity(page_url, index):
     cookies = h.get_secrets()["furaffinity"]["cookies"]
 
     res = requests.get(page_url, cookies=cookies)
@@ -158,7 +158,7 @@ def furaffinity(page_url):
     return Work(title, artist, None, nsfw, image_url, page_url)
 
 
-def auto(page_url):
+def auto(page_url, index=0):
     domains = {
         "artstation": artstation,
         "pixiv": pixiv,
@@ -172,4 +172,4 @@ def auto(page_url):
     domain = no_fetch_extract(page_url).domain
 
     if domain in domains:
-        return domains[domain](page_url)
+        return domains[domain](page_url, index)
