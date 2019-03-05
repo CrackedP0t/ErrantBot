@@ -66,7 +66,7 @@ def pixiv(page_url):
         data["series"],
         data["x_restrict"] > 0,
         data["meta_single_page"]["original_image_url"]
-        if len(data["meta_pages"]) < 0
+        if len(data["meta_pages"]) == 0
         else data["meta_pages"][0]["image_urls"]["original"],
         page_url,
     )
