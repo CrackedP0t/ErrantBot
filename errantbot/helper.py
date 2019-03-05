@@ -149,7 +149,11 @@ def do_post(db, reddit, row):
 def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
     cursor = db.cursor()
 
-    work_ids = list(work_ids)
+    if not isinstance(work_ids, list):
+        if hasattr(work_ids, "__iter__"):
+            work_ids = list(work_ids)
+        else:
+            work_ids = [work_ids]
 
     if submissions:
         submissions = list(submissions)
@@ -189,7 +193,11 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
 
 
 def upload_to_imgur(db, work_ids=[], last=False):
-    work_ids = list(work_ids)
+    if not isinstance(work_ids, list):
+        if hasattr(work_ids, "__iter__"):
+            work_ids = list(work_ids)
+        else:
+            work_ids = [work_ids]
 
     if last:
         work_ids.append(get_last(db, "works"))
