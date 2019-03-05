@@ -34,7 +34,7 @@ def cli():
 @click.option("--title", "-t")
 @click.option("--artist", "-a")
 @click.option("--series", "-s")
-@click.option("--nsfw/--sfw", default=None)
+@click.option("--nsfw/--sfw", "-n/-N", default=None)
 @click.option("--index", "-i", default=0, type=int)
 def add(source_url, submissions, title, artist, series, nsfw, index):
     work = extract.auto(source_url, index)
@@ -75,7 +75,7 @@ def add(source_url, submissions, title, artist, series, nsfw, index):
 @click.argument("source-image-url", type=types.url, required=True)
 @click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--series", "-s")
-@click.option("--nsfw/--sfw")
+@click.option("--nsfw/--sfw", "-n/-N")
 def add_custom(title, artist, source_url, source_image_url, submissions, series, nsfw):
     submissions = h.Submissions(submissions)
     db = connect_db()
@@ -116,6 +116,20 @@ def crosspost(work_id, submissions):
     db = connect_db()
 
     submissions = h.Submissions(submissions)
+
+    h.add_submissions(db, work_id, submissions)
+
+    h.post_submissions(db, work_id, submissions)
+
+
+@cli.command()
+@click.argument("submissions", nargs=-1, type=types.submission)
+def crosspost_last(submissions):
+    submissions = h.Submissions(submissions)
+
+    db = connect_db()
+
+    work_id = h.get_last(db, "works")
 
     h.add_submissions(db, work_id, submissions)
 

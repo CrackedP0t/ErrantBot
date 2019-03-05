@@ -155,13 +155,10 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
         else:
             work_ids = [work_ids]
 
-    if submissions:
-        submissions = list(submissions)
-
     if last:
         work_ids.append(get_last(db, "works"))
 
-    submissions = submissions and not all
+    submissions = False if all else submissions
 
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
@@ -175,7 +172,7 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
         submissions.subreddit_id = subreddits.id"""
         + (" AND works.id = ANY(%s)" if not all else "")
         + (" AND subreddits.name = ANY(%s)" if submissions else ""),
-        (work_ids, submissions.names) if submissions else (work_ids,),
+        (work_ids, list(submissions.names)) if submissions else (work_ids,),
     )
 
     rows = cursor.fetchall()
