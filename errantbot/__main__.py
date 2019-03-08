@@ -242,7 +242,7 @@ def list_works():
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     cursor.execute(
-        """SELECT id, artist, title, series, nsfw, source_url, imgur_image_url
+        """SELECT id, artist, title, series, nsfw, source_url, imgur_url
         FROM works"""
     )
 

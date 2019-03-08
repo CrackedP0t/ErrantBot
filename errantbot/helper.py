@@ -89,6 +89,7 @@ def do_post(db, reddit, row):
             "imgur_url",
             "rehost",
             "source_image_url",
+            "source_image_urls",
             "flair_id",
             "nsfw",
             "source_url",
@@ -122,7 +123,13 @@ def do_post(db, reddit, row):
         **row
     )
 
-    url = row["imgur_url" if row["rehost"] else "source_image_url"]
+    if row["rehost"]:
+        url = row["imgur_url"]
+    else:
+        if row["is_album"]:
+            url = row["source_image_urls"][0]
+        else:
+            url = row["source_image_url"]
 
     submission = sub.submit(title, url=url, flair_id=row["flair_id"])
 
@@ -164,7 +171,7 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
         """SELECT title, series, artist, source_url, imgur_url, nsfw,
         source_image_url, name, tag_series, custom_tag, submissions.id,
         COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
-        rehost, last_submission_on
+        rehost, last_submission_on, source_image_urls
         FROM works INNER JOIN submissions ON
         submissions.reddit_id IS NULL AND
         submissions.work_id = works.id
@@ -242,6 +249,8 @@ def upload_to_imgur(db, work_ids=[], last=False):
                 """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
                 (album_id, link, row["id"]),
             )
+
+            db.commit()
 
             counter = 0
             for image_url in row["source_image_urls"]:
