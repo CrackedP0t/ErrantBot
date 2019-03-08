@@ -240,7 +240,7 @@ def upload_to_imgur(db, work_ids=[], last=False):
 
             cursor.execute(
                 """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
-                (data["id"], link, row["id"]),
+                (album_id, link, row["id"]),
             )
 
             counter = 0
