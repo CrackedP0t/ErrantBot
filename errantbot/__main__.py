@@ -36,8 +36,9 @@ def cli():
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw", "-n/-N", default=None)
 @click.option("--index", "-i", default=0, type=int)
-def add(source_url, submissions, title, artist, series, nsfw, index):
-    work = extract.auto(source_url, index)
+@click.option("--album", "-l", is_flag=True)
+def add(source_url, submissions, title, artist, series, nsfw, index, album):
+    work = extract.auto(source_url, {"index": index, "album": album})
 
     work = extract.Work(
         title or work.title,
@@ -186,8 +187,9 @@ def list_flairs(subreddit_name):
 @cli.command("extract")
 @click.argument("url", required=True, type=types.url)
 @click.option("--index", "-i", default=0, type=int)
-def _extract(url, index):
-    work = extract.auto(url, index)
+@click.option("--album", "-l", is_flag=True)
+def _extract(url, index, album):
+    work = extract.auto(url, {"index": index, "album": album})
 
     for field in work._fields:
         attr = getattr(work, field)

@@ -134,16 +134,20 @@ class Imgur:
         with open("imgur_token.json", mode="w") as token_file:
             json.dump(token, token_file)
 
-    def upload_url(self, url, title, description):
+    def upload_url(self, url, title=None, description=None, album_id=None):
         # Quote for Unicode in path
         parts = urlparse(url)
         quoted = parts.scheme + "://" + parts.netloc + quote(parts.path)
-        return self.session.post(
-            "https://api.imgur.com/3/image",
-            {
-                "type": "URL",
-                "image": quoted,
-                "title": title,
-                "description": description,
-            },
-        )
+
+        body = {"type": "URL", "image": quoted}
+
+        if title is not None:
+            body["title"] = title
+        if description is not None:
+            body["description"] = description
+        if album_id is not None:
+            body["album"] = album_id
+
+        resp = self.session.post("https://api.imgur.com/3/image", body)
+
+        return resp

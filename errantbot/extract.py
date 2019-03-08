@@ -14,7 +14,7 @@ Work = namedtuple(
 )
 
 
-def artstation(page_url, index):
+def artstation(page_url, options):
     parsed = urlparse(page_url)
 
     ident = regex.search(r"([^/]*)\/?$", parsed.path)[0]
@@ -47,7 +47,7 @@ def artstation(page_url, index):
     return Work(title, clean_artist, None, nsfw, image_url, page_url)
 
 
-def pixiv(page_url, index):
+def pixiv(page_url, options):
     parsed = urlparse(page_url)
     query = parse_qs(parsed.query)
 
@@ -60,19 +60,24 @@ def pixiv(page_url, index):
 
     data = api.illust_detail(id)["illust"]
 
+    if len(data["meta_pages"]) == 0:
+        image_url = data["meta_single_page"]["original_image_url"]
+    elif options["album"]:
+        image_url = [image["image_urls"]["original"] for image in data["meta_pages"]]
+    else:
+        image_url = data["meta_pages"][options["index"]]["image_urls"]["original"]
+
     return Work(
         data["title"],
         data["user"]["name"],
         data["series"],
         data["x_restrict"] > 0,
-        data["meta_single_page"]["original_image_url"]
-        if len(data["meta_pages"]) == 0
-        else data["meta_pages"][index]["image_urls"]["original"],
+        image_url,
         page_url,
     )
 
 
-def hentai_foundry(page_url, index):
+def hentai_foundry(page_url, options):
     res = requests.get(page_url + "?enterAgree=1")
 
     res.raise_for_status()
@@ -99,7 +104,7 @@ def hentai_foundry(page_url, index):
     return Work(title, artist, series, nsfw, image_url, page_url)
 
 
-def deviantart(page_url, index):
+def deviantart(page_url, options):
     oe_req = requests.get(
         "https://backend.deviantart.com/oembed?url={}".format(quote(page_url))
     )
@@ -123,7 +128,7 @@ def deviantart(page_url, index):
 # Note: Due to FurAffinity's system, in order to access NSFW images we need to use
 # the user's cookies taken from their browser.
 # Therefore, FurAffinity integration will probably break a lot.
-def furaffinity(page_url, index):
+def furaffinity(page_url, options):
     cookies = h.get_secrets()["furaffinity"]["cookies"]
 
     res = requests.get(page_url, cookies=cookies)
@@ -158,7 +163,16 @@ def furaffinity(page_url, index):
     return Work(title, artist, None, nsfw, image_url, page_url)
 
 
-def auto(page_url, index=0):
+def auto(page_url, options=None):
+    default_options = {"index": 0, "album": False}
+
+    if options is None:
+        options = {}
+
+    for k, v in default_options.items():
+        if k not in options:
+            options[k] = v
+
     domains = {
         "artstation": artstation,
         "pixiv": pixiv,
@@ -172,4 +186,4 @@ def auto(page_url, index=0):
     domain = no_fetch_extract(page_url).domain
 
     if domain in domains:
-        return domains[domain](page_url, index)
+        return domains[domain](page_url, options)

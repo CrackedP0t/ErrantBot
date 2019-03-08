@@ -86,7 +86,7 @@ def do_post(db, reddit, row):
             "last_submission_on",
             "name",
             "custom_tag",
-            "imgur_image_url",
+            "imgur_url",
             "rehost",
             "source_image_url",
             "flair_id",
@@ -122,7 +122,7 @@ def do_post(db, reddit, row):
         **row
     )
 
-    url = row["imgur_image_url" if row["rehost"] else "source_image_url"]
+    url = row["imgur_url" if row["rehost"] else "source_image_url"]
 
     submission = sub.submit(title, url=url, flair_id=row["flair_id"])
 
@@ -161,7 +161,7 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
     submissions = False if all else submissions
 
     cursor.execute(
-        """SELECT title, series, artist, source_url, imgur_image_url, nsfw,
+        """SELECT title, series, artist, source_url, imgur_url, nsfw,
         source_image_url, name, tag_series, custom_tag, submissions.id,
         COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
         rehost, last_submission_on
@@ -202,7 +202,8 @@ def upload_to_imgur(db, work_ids=[], last=False):
     cursor = db.cursor()
 
     cursor.execute(
-        """SELECT title, artist, source_image_url, source_url, imgur_image_url, id
+        """SELECT title, artist, source_image_url, source_image_urls,
+        source_url, imgur_url, id, is_album
         FROM works WHERE id = ANY(%s) AND imgur_id IS NULL""",
         (work_ids,),
     )
@@ -218,23 +219,56 @@ def upload_to_imgur(db, work_ids=[], last=False):
     errecho("Uploading to Imgur...")
 
     for row in rows:
-        resp = imgur.upload_url(
-            row["source_image_url"],
-            "{title} ({artist})".format(**row),
-            "Source: {source_url}".format(**row),
-        )
+        title = "{title} ({artist})".format(**row)
+        description = "Source: {source_url}".format(**row)
 
-        resp.raise_for_status()
+        if row["is_album"]:
+            resp = imgur.session.post(
+                "https://api.imgur.com/3/album",
+                {"title": title, "description": description},
+            )
 
-        data = resp.json()["data"]
+            resp.raise_for_status()
 
-        cursor.execute(
-            """UPDATE works SET imgur_id=%s, imgur_image_url=%s WHERE id=%s""",
-            (data["id"], data["link"], row["id"]),
-        )
-        db.commit()
+            data = resp.json()["data"]
 
-        errecho("\tUploaded at {}".format(data["link"]))
+            album_id = data["id"]
+
+            link = "https://imgur.com/a/{}".format(album_id)
+
+            errecho("Created album at {}".format(link))
+
+            cursor.execute(
+                """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
+                (data["id"], link, row["id"]),
+            )
+
+            counter = 0
+            for image_url in row["source_image_urls"]:
+                counter += 1
+
+                resp = imgur.upload_url(image_url, album_id=album_id)
+
+                resp.raise_for_status()
+
+                data = resp.json()["data"]
+
+                errecho("Uploaded image #{} to {}".format(counter, data["link"]))
+
+        else:
+            resp = imgur.upload_url(row["source_image_url"], title, description)
+
+            resp.raise_for_status()
+
+            data = resp.json()["data"]
+
+            cursor.execute(
+                """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
+                (data["id"], data["link"], row["id"]),
+            )
+            db.commit()
+
+            errecho("\tUploaded at {}".format(data["link"]))
 
 
 def save_work(db, title, series, artist, source_url, nsfw, source_image_url):
@@ -242,10 +276,14 @@ def save_work(db, title, series, artist, source_url, nsfw, source_image_url):
 
     cursor = db.cursor()
 
+    is_album = isinstance(source_image_url, list)
+
     cursor.execute(
-        """INSERT INTO works (title, series, artist, source_url, nsfw, source_image_url)
-        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;""",
-        (title, series, artist, source_url, nsfw, source_image_url),
+        """INSERT INTO works (title, series, artist, source_url, nsfw, is_album, {})
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;""".format(
+            "source_image_urls" if is_album else "source_image_url"
+        ),
+        (title, series, artist, source_url, nsfw, is_album, source_image_url),
     )
     db.commit()
 
