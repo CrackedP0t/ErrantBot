@@ -144,9 +144,12 @@ CREATE TABLE public.works (
     series character varying,
     nsfw boolean DEFAULT false NOT NULL,
     source_url character varying NOT NULL,
-    source_image_url character varying NOT NULL,
+    source_image_url character varying,
     imgur_id character varying,
-    imgur_image_url character varying
+    imgur_url character varying,
+    source_image_urls character varying[],
+    is_album boolean DEFAULT false NOT NULL,
+    CONSTRAINT multiple_or_one CHECK ((((source_image_urls IS NOT NULL) AND (source_image_url IS NULL)) OR ((source_image_urls IS NULL) AND (source_image_url IS NOT NULL))))
 );
 
 
@@ -232,11 +235,11 @@ ALTER TABLE ONLY public.works
 
 
 --
--- Name: works works_source_url_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: works works_source_image_url_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.works
-    ADD CONSTRAINT works_source_url_key UNIQUE (source_url);
+    ADD CONSTRAINT works_source_image_url_key UNIQUE (source_image_url);
 
 
 --
