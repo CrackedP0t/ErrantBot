@@ -114,14 +114,15 @@ def deviantart(page_url, options):
 
     data = oe_req.json()
 
-    fullsize = regex.compile(r".*?\.(?:jpg|png)")
+    url = regex.match(r".*?\.(?:jpg|png)", data["url"])[0]
+    url = regex.sub(r"(.*?\.com)", r"\1/intermediary", url)
 
     return Work(
         data["title"],
         data["author_name"],
         None,
         data["safety"] != "nonadult",
-        fullsize.match(data["url"])[0],
+        url,
         page_url,
     )
 
