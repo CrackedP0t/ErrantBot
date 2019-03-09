@@ -223,7 +223,9 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
     cursor.execute(
         """SELECT title, artist, source_image_url, source_image_urls,
         source_url, imgur_url, id, is_album
-        FROM works WHERE imgur_id IS NULL""".format("" if any else "id = ANY(%s) AND "),
+        FROM works WHERE imgur_id IS NULL""".format(
+            "" if any else "id = ANY(%s) AND "
+        ),
         (work_ids,) if any else (),
     )
 
