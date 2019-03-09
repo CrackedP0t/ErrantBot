@@ -204,23 +204,24 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
         do_post(db, reddit, row)
 
 
-def upload_to_imgur(db, work_ids=[], last=False):
-    if not isinstance(work_ids, list):
-        if hasattr(work_ids, "__iter__"):
-            work_ids = list(work_ids)
-        else:
-            work_ids = [work_ids]
+def upload_to_imgur(db, work_ids=[], last=False, all=False):
+    if not all:
+        if not isinstance(work_ids, list):
+            if hasattr(work_ids, "__iter__"):
+                work_ids = list(work_ids)
+            else:
+                work_ids = [work_ids]
 
-    if last:
-        work_ids.append(get_last(db, "works"))
+        if last:
+            work_ids.append(get_last(db, "works"))
 
     cursor = db.cursor()
 
     cursor.execute(
         """SELECT title, artist, source_image_url, source_image_urls,
         source_url, imgur_url, id, is_album
-        FROM works WHERE id = ANY(%s) AND imgur_id IS NULL""",
-        (work_ids,),
+        FROM works WHERE imgur_id IS NULL""".format("" if any else "id = ANY(%s) AND "),
+        (work_ids,) if any else (),
     )
 
     rows = cursor.fetchall()
