@@ -99,6 +99,8 @@ def do_post(db, reddit, row):
 
     cursor = db.cursor()
 
+    print(row["last_submission_on"].tzinfo, datetime.utcnow().tzinfo)
+
     if row["last_submission_on"]:
         since = datetime.utcnow() - row["last_submission_on"]
         if since < timedelta(days=1):
@@ -110,6 +112,8 @@ def do_post(db, reddit, row):
             )
 
             return
+
+    return
 
     sub = reddit.subreddit(row["name"])
 
@@ -153,7 +157,8 @@ def do_post(db, reddit, row):
         submission.reply("[Source]({})".format(row["source_url"]))
 
         cursor.execute(
-            """UPDATE submissions SET reddit_id = %s, submitted_on = to_timestamp(%s)
+            """UPDATE submissions SET reddit_id = %s,
+            submitted_on = to_timestamp(%s) AT TIME ZONE UTC
             WHERE id = %s""",
             (submission.id, int(submission.created_utc), row["id"]),
         )

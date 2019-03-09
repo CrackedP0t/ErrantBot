@@ -37,7 +37,8 @@ def cli():
 @click.option("--nsfw/--sfw", "-n/-N", default=None)
 @click.option("--index", "-i", default=0, type=int)
 @click.option("--album", "-l", is_flag=True)
-def add(source_url, submissions, title, artist, series, nsfw, index, album):
+@click.option("--post/--no-post", "-p/-P", default=True)
+def add(source_url, submissions, title, artist, series, nsfw, index, album, post):
     work = extract.auto(source_url, {"index": index, "album": album})
 
     work = extract.Work(
@@ -66,7 +67,8 @@ def add(source_url, submissions, title, artist, series, nsfw, index, album):
 
     h.upload_to_imgur(db, work_id)
 
-    h.post_submissions(db, work_id)
+    if post:
+        h.post_submissions(db, work_id)
 
 
 @cli.command()
