@@ -94,8 +94,9 @@ def hentai_foundry(page_url, options):
 
     series = None
 
-    if category[0].text != "Original":
-        series = category[1].text
+    if len(category) > 1:
+        if category[0].text != "Original":
+            series = category[1].text
 
     ratings = soup.find(class_="ratings_box")
 

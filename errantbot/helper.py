@@ -99,10 +99,6 @@ def do_post(db, reddit, row):
 
     cursor = db.cursor()
 
-    if not row["series"] and row["tag_series"]:
-        errecho("\t/r/{} requires a series".format(row["name"]))
-        return
-
     if row["last_submission_on"]:
         since = datetime.utcnow() - row["last_submission_on"]
         if since < timedelta(days=1):
@@ -117,8 +113,13 @@ def do_post(db, reddit, row):
 
     sub = reddit.subreddit(row["name"])
 
+    if row["tag_series"]:
+        series_tag = " [" + (row["series"] or "Original") + "]"
+    else:
+        series_tag = ""
+
     title = "{title} ({artist}){series_tag}{tag}".format(
-        series_tag=" [" + row["series"] + "]" if row["tag_series"] else "",
+        series_tag=series_tag,
         tag=" " + row["custom_tag"] if row["custom_tag"] else "",
         **row
     )
@@ -131,26 +132,33 @@ def do_post(db, reddit, row):
         else:
             url = row["source_image_url"]
 
-    submission = sub.submit(title, url=url, flair_id=row["flair_id"])
-
-    errecho(
-        "\tSubmitted to /r/{} at https://reddit.com{}".format(
-            row["name"], submission.permalink
+    try:
+        submission = sub.submit(title, url=url, flair_id=row["flair_id"])
+    except praw.exceptions.APIException as e:
+        errecho(
+            "\tCouldn't submit to /r/{} - got error {}: '{}'".format(
+                row["name"], e.error_type, e.message
+            )
         )
-    )
+    else:
+        errecho(
+            "\tSubmitted to /r/{} at https://reddit.com{}".format(
+                row["name"], submission.permalink
+            )
+        )
 
-    if row["nsfw"]:
-        submission.mod.nsfw()
+        if row["nsfw"]:
+            submission.mod.nsfw()
 
-    submission.reply("[Source]({})".format(row["source_url"]))
+        submission.reply("[Source]({})".format(row["source_url"]))
 
-    cursor.execute(
-        """UPDATE submissions SET reddit_id = %s, submitted_on = to_timestamp(%s)
-        WHERE id = %s""",
-        (submission.id, int(submission.created_utc), row["id"]),
-    )
+        cursor.execute(
+            """UPDATE submissions SET reddit_id = %s, submitted_on = to_timestamp(%s)
+            WHERE id = %s""",
+            (submission.id, int(submission.created_utc), row["id"]),
+        )
 
-    db.commit()
+        db.commit()
 
 
 def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
