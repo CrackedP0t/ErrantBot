@@ -115,8 +115,6 @@ def do_post(db, reddit, row):
             "name",
             "title",
             "artist",
-            "last_submission_on",
-            "name",
             "custom_tag",
             "imgur_url",
             "rehost",
@@ -125,14 +123,22 @@ def do_post(db, reddit, row):
             "flair_id",
             "nsfw",
             "source_url",
-            "id",
+            "submission_id",
+            "subreddit_id",
         ),
     )
 
     cursor = db.cursor()
 
-    if row["last_submission_on"]:
-        since = datetime.utcnow() - row["last_submission_on"]
+    cursor.execute(
+        "SELECT last_submission_on FROM subreddits WHERE id = %s",
+        (row["subreddit_id"],),
+    )
+
+    last_submission_on = cursor.fetchone()["last_submission_on"]
+
+    if last_submission_on:
+        since = datetime.utcnow() - last_submission_on
         if since < timedelta(days=1):
             wait = timedelta(days=1) - since
             wait = timedelta(wait.days, wait.seconds)
@@ -188,7 +194,7 @@ def do_post(db, reddit, row):
             """UPDATE submissions SET reddit_id = %s,
             submitted_on = to_timestamp(%s) AT TIME ZONE 'utc'
             WHERE id = %s""",
-            (submission.id, int(submission.created_utc), row["id"]),
+            (submission.id, int(submission.created_utc), row["submission_id"]),
         )
 
         db.commit()
@@ -209,15 +215,16 @@ def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
     submissions = False if all else submissions
 
     cursor.execute(
-        """SELECT title, series, artist, source_url, imgur_url, nsfw,
-        source_image_url, name, tag_series, custom_tag, submissions.id,
-        COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id,
-        rehost, last_submission_on, source_image_urls
-        FROM works INNER JOIN submissions ON
-        submissions.reddit_id IS NULL AND
-        submissions.work_id = works.id
-        INNER JOIN subreddits ON
-        submissions.subreddit_id = subreddits.id"""
+        """SELECT title, series, artist, source_url, imgur_url, nsfw, name,
+        source_image_url, tag_series, custom_tag, submissions.id AS submission_id,
+        rehost, source_image_urls, subreddits.id AS subreddit_id,
+        COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id
+        FROM works
+        INNER JOIN submissions
+        ON submissions.reddit_id IS NULL
+        AND submissions.work_id = works.id
+        INNER JOIN subreddits
+        ON submissions.subreddit_id = subreddits.id"""
         + (" AND works.id = ANY(%s)" if not all else "")
         + (" AND subreddits.name = ANY(%s)" if submissions else ""),
         (work_ids, list(submissions.names)) if submissions else (work_ids,),

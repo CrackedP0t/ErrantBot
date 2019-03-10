@@ -55,7 +55,7 @@ class Reddit:
             print(
                 "Please go here to authorize: "
                 + self.reddit.auth.url(
-                    ["identity", "flair", "submit", "read", "modposts"], state
+                    ["identity", "flair", "submit", "read", "edit", "modposts"], state
                 )
             )
 

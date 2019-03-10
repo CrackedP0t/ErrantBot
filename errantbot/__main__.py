@@ -4,6 +4,8 @@ import psycopg2
 import psycopg2.extras
 from tabulate import tabulate
 from collections import namedtuple
+import validators as val
+from praw.models import Submission
 
 
 @click.group()
@@ -235,6 +237,63 @@ def list_works(con):
     rows = cursor.fetchall()
 
     click.echo(tabulate(rows, headers="keys"))
+
+
+@cli.command()
+@click.pass_obj
+@click.option("--reddit-id", "-r", "id_type", flag_value="reddit", default=True)
+@click.option("--submission-id", "-s", "id_type", flag_value="submission")
+@click.option("--delete/--no-delete", "-d/-D", default=True)
+@click.argument("post-id")
+def delete_post(con, id_type, delete, post_id):
+    cursor = con.db.cursor()
+
+    if id_type == "submission":
+        submission_id = post_id
+
+        cursor.execute(
+            "SELECT reddit_id FROM submissions WHERE id = %s", (submission_id,)
+        )
+        row = cursor.fetchone()
+
+        if row is None:
+            raise click.ClickException(
+                "Submission #{} does not exist".format(submission_id)
+            )
+
+        reddit_id = row["reddit_id"]
+
+        if reddit_id is None:
+            raise click.ClickException(
+                "Submission #{} has no reddit post".format(submission_id)
+            )
+    else:
+        reddit_id = post_id
+
+        if val.url(reddit_id):
+            reddit_id = Submission.id_from_url(reddit_id)
+
+    if delete:
+        sub = con.reddit.submission(reddit_id)
+
+        sub.delete()
+
+        sub.comments.replace_more(limit=None)
+
+        for comment in sub.comments.list():
+            if comment.author == con.reddit.user.me():
+                comment.delete()
+
+    if submission_id:
+        where = "id = %s"
+    else:
+        where = "reddit_id = %s"
+
+    cursor.execute(
+        "UPDATE submissions SET reddit_id = NULL, submitted_on = NULL WHERE " + where,
+        (submission_id or reddit_id,),
+    )
+    con.db.commit()
 
 
 if __name__ == "__main__":
