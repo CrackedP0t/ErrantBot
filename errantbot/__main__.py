@@ -77,7 +77,7 @@ def add_custom(
 
     h.upload_to_imgur(con.db, work_id)
 
-    h.post_submissions(con.db, work_id)
+    h.post_submissions(con, work_id)
 
 
 @cli.command()
@@ -108,7 +108,7 @@ def crosspost(con, work_id, submissions):
 
     h.add_submissions(con.db, work_id, submissions)
 
-    h.post_submissions(con.db, work_id, submissions)
+    h.post_submissions(con, work_id, submissions)
 
 
 @cli.command()
@@ -121,7 +121,7 @@ def crosspost_last(con, submissions):
 
     h.add_submissions(con.db, work_id, submissions)
 
-    h.post_submissions(con.db, work_id, submissions)
+    h.post_submissions(con, work_id, submissions)
 
 
 @cli.command()
@@ -129,13 +129,13 @@ def crosspost_last(con, submissions):
 @click.argument("work-ids", type=int, nargs=-1)
 @click.option("--last", "-l", is_flag=True)
 def retry_post(con, work_ids, last):
-    h.post_submissions(con.db, work_ids, last=last)
+    h.post_submissions(con, work_ids, last=last)
 
 
 @cli.command()
 @click.pass_obj
 def retry_all_posts(con):
-    h.post_submissions(con.db, all=True)
+    h.post_submissions(con, all=True)
 
 
 @cli.command()
