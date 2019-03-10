@@ -1,7 +1,6 @@
 from click import ParamType
 import validators as val
 import regex
-from . import helper as h
 
 
 class URL(ParamType):
