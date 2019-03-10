@@ -111,13 +111,10 @@ def do_post(db, reddit, row):
         row,
         (
             "series",
-            "tag_series",
-            "name",
             "title",
             "artist",
             "custom_tag",
             "imgur_url",
-            "rehost",
             "source_image_url",
             "source_image_urls",
             "flair_id",
@@ -131,27 +128,28 @@ def do_post(db, reddit, row):
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT last_submission_on FROM subreddits WHERE id = %s",
+        """SELECT last_submission_on, space_out, name, tag_series,
+        rehost, flair_id FROM subreddits WHERE id = %s""",
         (row["subreddit_id"],),
     )
 
-    last_submission_on = cursor.fetchone()["last_submission_on"]
+    sr_row = cursor.fetchone()
 
-    if last_submission_on:
-        since = datetime.utcnow() - last_submission_on
+    if sr_row["space_out"] and sr_row["last_submission_on"] is not None:
+        since = datetime.utcnow() - sr_row["last_submission_on"]
         if since < timedelta(days=1):
             wait = timedelta(days=1) - since
             wait = timedelta(wait.days, wait.seconds)
             errecho(
                 "\tSubmitted to /r/{} less than one day ago; "
-                "you can try again in {}".format(row["name"], wait)
+                "you can try again in {}".format(sr_row["name"], wait)
             )
 
             return
 
-    sub = reddit.subreddit(row["name"])
+    sub = reddit.subreddit(sr_row["name"])
 
-    if row["tag_series"]:
+    if sr_row["tag_series"]:
         series_tag = " [" + (row["series"] or "Original") + "]"
     else:
         series_tag = ""
@@ -162,7 +160,7 @@ def do_post(db, reddit, row):
         **row
     )
 
-    if row["rehost"]:
+    if sr_row["rehost"]:
         url = row["imgur_url"]
     else:
         if row["is_album"]:
@@ -171,17 +169,19 @@ def do_post(db, reddit, row):
             url = row["source_image_url"]
 
     try:
-        submission = sub.submit(title, url=url, flair_id=row["flair_id"])
+        submission = sub.submit(
+            title, url=url, flair_id=row["flair_id"] or sr_row["flair_id"]
+        )
     except praw.exceptions.APIException as e:
         errecho(
             "\tCouldn't submit to /r/{} - got error {}: '{}'".format(
-                row["name"], e.error_type, e.message
+                sr_row["name"], e.error_type, e.message
             )
         )
     else:
         errecho(
             "\tSubmitted to /r/{} at https://reddit.com{}".format(
-                row["name"], submission.permalink
+                sr_row["name"], submission.permalink
             )
         )
 
@@ -215,16 +215,13 @@ def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
     submissions = False if all else submissions
 
     cursor.execute(
-        """SELECT title, series, artist, source_url, imgur_url, nsfw, name,
-        source_image_url, tag_series, custom_tag, submissions.id AS submission_id,
-        rehost, source_image_urls, subreddits.id AS subreddit_id,
-        COALESCE(submissions.flair_id, subreddits.flair_id) AS flair_id
+        """SELECT title, series, artist, source_url, imgur_url, nsfw,
+        source_image_url, custom_tag, submissions.id as submission_id,
+        source_image_urls, subreddit_id, flair_id
         FROM works
         INNER JOIN submissions
         ON submissions.reddit_id IS NULL
-        AND submissions.work_id = works.id
-        INNER JOIN subreddits
-        ON submissions.subreddit_id = subreddits.id"""
+        AND submissions.work_id = works.id"""
         + (" AND works.id = ANY(%s)" if not all else "")
         + (" AND subreddits.name = ANY(%s)" if submissions else ""),
         (work_ids, list(submissions.names)) if submissions else (work_ids,),
@@ -350,15 +347,19 @@ def save_work(db, title, series, artist, source_url, nsfw, source_image_url):
     return work_id
 
 
-def add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require_tag):
+def add_subreddit(
+    db, name, tag_series, flair_id, rehost, require_flair, require_tag, space_out
+):
     cursor = db.cursor()
 
     cursor.execute(
         """INSERT INTO subreddits (name, tag_series, flair_id,
-        rehost, require_flair, require_tag) VALUES (%s, %s, %s, %s, %s, %s)
+        rehost, require_flair, require_tag, space_out)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s, rehost = %s,
-        require_flair = %s, require_tag = %s""",
-        (name,) + (tag_series, flair_id, rehost, require_flair, require_tag) * 2,
+        require_flair = %s, require_tag = %s, space_out = %s""",
+        (name,)
+        + (tag_series, flair_id, rehost, require_flair, require_tag, space_out) * 2,
     )
     db.commit()
 

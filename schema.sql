@@ -109,7 +109,8 @@ CREATE TABLE public.subreddits (
     rehost boolean DEFAULT true,
     last_submission_on timestamp without time zone,
     require_flair boolean DEFAULT false NOT NULL,
-    require_tag boolean DEFAULT false NOT NULL
+    require_tag boolean DEFAULT false NOT NULL,
+    space_out boolean DEFAULT true NOT NULL
 );
 
 

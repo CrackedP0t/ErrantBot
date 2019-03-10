@@ -90,14 +90,24 @@ def add_custom(
 @click.option("--rehost/--no-rehost", "-r/-R", default=True)
 @click.option("--require-flair/--no-require-flair", "-q/-Q", default=False)
 @click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
-def add_sub(con, name, tag_series, flair_id, rehost, require_flair, require_tag):
+@click.option("--space-out/--no-space-out", "-o/-O", default=True)
+def add_sub(
+    con, name, tag_series, flair_id, rehost, require_flair, require_tag, space_out
+):
     status = h.subreddit_status(name, con.reddit)
 
     if not status:
         raise click.ClickException("/r/{} is {}".format(name, status.name.lower()))
 
     h.add_subreddit(
-        con.db, name, tag_series, flair_id, rehost, require_flair, require_tag
+        con.db,
+        name,
+        tag_series,
+        flair_id,
+        rehost,
+        require_flair,
+        require_tag,
+        space_out,
     )
 
 
