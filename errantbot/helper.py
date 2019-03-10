@@ -6,7 +6,7 @@ from prawcore import exceptions
 import praw
 import enum
 import psycopg2
-from psycopg2 import sql
+from psycopg2 import sql, extras
 
 
 def has_keys(d, l):
@@ -62,6 +62,38 @@ def connect_reddit():
     return reddit.reddit
 
 
+def connect_db():
+    errecho("Connecting to database...")
+
+    secrets = get_secrets()["database"]
+
+    db = psycopg2.connect(
+        user=secrets["user"],
+        password=secrets["password"],
+        dbname=secrets["name"],
+        cursor_factory=extras.DictCursor,
+    )
+
+    errecho("\tConnected")
+
+    return db
+
+
+class Connections:
+    def __getattr__(self, name):
+        if name == "imgur":
+            self.imgur = connect_imgur()
+            return self.imgur
+        elif name == "reddit":
+            self.reddit = connect_reddit()
+            return self.reddit
+        elif name == "db":
+            self.db = connect_db()
+            return self.db
+        else:
+            raise AttributeError("{} is not a valid connection name".format(name))
+
+
 def get_last(db, table):
     cursor = db.cursor()
 
@@ -110,8 +142,6 @@ def do_post(db, reddit, row):
             )
 
             return
-
-    print(datetime.utcnow())
 
     sub = reddit.subreddit(row["name"])
 
@@ -164,8 +194,8 @@ def do_post(db, reddit, row):
         db.commit()
 
 
-def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
-    cursor = db.cursor()
+def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
+    cursor = con.db.cursor()
 
     if not isinstance(work_ids, list):
         if hasattr(work_ids, "__iter__"):
@@ -174,7 +204,7 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
             work_ids = [work_ids]
 
     if last:
-        work_ids.append(get_last(db, "works"))
+        work_ids.append(get_last(con.db, "works"))
 
     submissions = False if all else submissions
 
@@ -199,15 +229,13 @@ def post_submissions(db, work_ids=[], submissions=None, all=False, last=False):
         errecho("No works require posting")
         return
 
-    reddit = connect_reddit()
-
     errecho("Posting...")
 
     for row in rows:
-        do_post(db, reddit, row)
+        do_post(con.db, con.reddit, row)
 
 
-def upload_to_imgur(db, work_ids=[], last=False, all=False):
+def upload_to_imgur(con, work_ids=[], last=False, all=False):
     if not all:
         if not isinstance(work_ids, list):
             if hasattr(work_ids, "__iter__"):
@@ -216,9 +244,9 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
                 work_ids = [work_ids]
 
         if last:
-            work_ids.append(get_last(db, "works"))
+            work_ids.append(get_last(con.db, "works"))
 
-    cursor = db.cursor()
+    cursor = con.db.cursor()
 
     cursor.execute(
         """SELECT title, artist, source_image_url, source_image_urls,
@@ -235,8 +263,6 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
         errecho("No works require uploading")
         return
 
-    imgur = connect_imgur()
-
     errecho("Uploading to Imgur...")
 
     for row in rows:
@@ -244,7 +270,7 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
         description = "Source: {source_url}".format(**row)
 
         if row["is_album"]:
-            resp = imgur.session.post(
+            resp = con.imgur.session.post(
                 "https://api.imgur.com/3/album",
                 {"title": title, "description": description},
             )
@@ -264,13 +290,13 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
                 (album_id, link, row["id"]),
             )
 
-            db.commit()
+            con.db.commit()
 
             counter = 0
             for image_url in row["source_image_urls"]:
                 counter += 1
 
-                resp = imgur.upload_url(image_url, album_id=album_id)
+                resp = con.imgur.upload_url(image_url, album_id=album_id)
 
                 resp.raise_for_status()
 
@@ -279,7 +305,7 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
                 errecho("Uploaded image #{} to {}".format(counter, data["link"]))
 
         else:
-            resp = imgur.upload_url(row["source_image_url"], title, description)
+            resp = con.imgur.upload_url(row["source_image_url"], title, description)
 
             resp.raise_for_status()
 
@@ -289,7 +315,7 @@ def upload_to_imgur(db, work_ids=[], last=False, all=False):
                 """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
                 (data["id"], data["link"], row["id"]),
             )
-            db.commit()
+            con.db.commit()
 
             errecho("\tUploaded at {}".format(data["link"]))
 

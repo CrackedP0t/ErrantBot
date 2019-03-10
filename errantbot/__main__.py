@@ -6,29 +6,14 @@ from tabulate import tabulate
 from collections import namedtuple
 
 
-def connect_db():
-    h.errecho("Connecting to database...")
-
-    secrets = h.get_secrets()["database"]
-
-    db = psycopg2.connect(
-        user=secrets["user"],
-        password=secrets["password"],
-        dbname=secrets["name"],
-        cursor_factory=psycopg2.extras.DictCursor,
-    )
-
-    h.errecho("\tConnected")
-
-    return db
-
-
 @click.group()
-def cli():
-    pass
+@click.pass_context
+def cli(ctx):
+    ctx.obj = h.Connections()
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("source-url", required=True, type=types.url)
 @click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--title", "-t")
@@ -38,7 +23,7 @@ def cli():
 @click.option("--index", "-i", default=0, type=int)
 @click.option("--album", "-l", is_flag=True)
 @click.option("--post/--no-post", "-p/-P", default=True)
-def add(source_url, submissions, title, artist, series, nsfw, index, album, post):
+def add(con, source_url, submissions, title, artist, series, nsfw, index, album, post):
     work = extract.auto(source_url, {"index": index, "album": album})
 
     work = extract.Work(
@@ -51,10 +36,9 @@ def add(source_url, submissions, title, artist, series, nsfw, index, album, post
     )
 
     submissions = h.Submissions(submissions)
-    db = connect_db()
 
     work_id = h.save_work(
-        db,
+        con.db,
         work.title,
         work.series,
         work.artist,
@@ -63,15 +47,16 @@ def add(source_url, submissions, title, artist, series, nsfw, index, album, post
         work.image_url,
     )
 
-    h.add_submissions(db, work_id, submissions)
+    h.add_submissions(con.db, work_id, submissions)
 
-    h.upload_to_imgur(db, work_id)
+    h.upload_to_imgur(con, work_id)
 
     if post:
-        h.post_submissions(db, work_id)
+        h.post_submissions(con, work_id)
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("title", required=True)
 @click.argument("artist", required=True)
 @click.argument("source-url", type=types.url, required=True)
@@ -79,104 +64,99 @@ def add(source_url, submissions, title, artist, series, nsfw, index, album, post
 @click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--series", "-s")
 @click.option("--nsfw/--sfw", "-n/-N")
-def add_custom(title, artist, source_url, source_image_url, submissions, series, nsfw):
+def add_custom(
+    con, title, artist, source_url, source_image_url, submissions, series, nsfw
+):
     submissions = h.Submissions(submissions)
-    db = connect_db()
 
-    work_id = h.save_work(db, title, series, artist, source_url, nsfw, source_image_url)
+    work_id = h.save_work(
+        con.db, title, series, artist, source_url, nsfw, source_image_url
+    )
 
-    h.add_submissions(db, work_id, submissions)
+    h.add_submissions(con.db, work_id, submissions)
 
-    h.upload_to_imgur(db, work_id)
+    h.upload_to_imgur(con.db, work_id)
 
-    h.post_submissions(db, work_id)
+    h.post_submissions(con.db, work_id)
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("name", required=True, type=types.subreddit)
 @click.option("--tag-series/--no-tag-series", "-s/-S", default=False)
 @click.option("--flair-id", "-f", type=types.flair_id)
 @click.option("--rehost/--no-rehost", "-r/-R", default=True)
 @click.option("--require-flair/--no-require-flair", "-q/-Q", default=False)
 @click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
-def add_sub(name, tag_series, flair_id, rehost, require_flair, require_tag):
-    reddit = h.connect_reddit()
-
-    status = h.subreddit_status(name, reddit)
+def add_sub(con, name, tag_series, flair_id, rehost, require_flair, require_tag):
+    status = h.subreddit_status(name, con.reddit)
 
     if not status:
         raise click.ClickException("/r/{} is {}".format(name, status.name.lower()))
 
-    db = connect_db()
-
-    h.add_subreddit(db, name, tag_series, flair_id, rehost, require_flair, require_tag)
+    h.add_subreddit(
+        con.db, name, tag_series, flair_id, rehost, require_flair, require_tag
+    )
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("work-id", type=int, required=True)
 @click.argument("submissions", nargs=-1, type=types.submission)
-def crosspost(work_id, submissions):
-    db = connect_db()
-
+def crosspost(con, work_id, submissions):
     submissions = h.Submissions(submissions)
 
-    h.add_submissions(db, work_id, submissions)
+    h.add_submissions(con.db, work_id, submissions)
 
-    h.post_submissions(db, work_id, submissions)
+    h.post_submissions(con.db, work_id, submissions)
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("submissions", nargs=-1, type=types.submission)
-def crosspost_last(submissions):
+def crosspost_last(con, submissions):
     submissions = h.Submissions(submissions)
 
-    db = connect_db()
+    work_id = h.get_last(con.db, "works")
 
-    work_id = h.get_last(db, "works")
+    h.add_submissions(con.db, work_id, submissions)
 
-    h.add_submissions(db, work_id, submissions)
-
-    h.post_submissions(db, work_id, submissions)
+    h.post_submissions(con.db, work_id, submissions)
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("work-ids", type=int, nargs=-1)
 @click.option("--last", "-l", is_flag=True)
-def retry_post(work_ids, last):
-    db = connect_db()
-
-    h.post_submissions(db, work_ids, last=last)
+def retry_post(con, work_ids, last):
+    h.post_submissions(con.db, work_ids, last=last)
 
 
 @cli.command()
-def retry_all_posts():
-    db = connect_db()
-
-    h.post_submissions(db, all=True)
-
-
-@cli.command()
-def retry_all_uploads():
-    db = connect_db()
-
-    h.upload_to_imgur(db, all=True)
+@click.pass_obj
+def retry_all_posts(con):
+    h.post_submissions(con.db, all=True)
 
 
 @cli.command()
+@click.pass_obj
+def retry_all_uploads(con):
+    h.upload_to_imgur(con.db, all=True)
+
+
+@cli.command()
+@click.pass_obj
 @click.argument("work-ids", type=int, nargs=-1)
 @click.option("--last", "-l", is_flag=True)
-def retry_upload(work_ids, last):
-    db = connect_db()
-
-    h.upload_to_imgur(db, work_ids, last=last)
+def retry_upload(con, work_ids, last):
+    h.upload_to_imgur(con.db, work_ids, last=last)
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("subreddit-name", type=types.subreddit, required=True)
-def list_flairs(subreddit_name):
-    reddit = h.connect_reddit()
-
-    sub = h.subreddit_or_status(reddit, subreddit_name)
+def list_flairs(con, subreddit_name):
+    sub = h.subreddit_or_status(con.reddit, subreddit_name)
 
     if not sub:
         click.ClickException("/r/{} is {}".format(subreddit_name, sub.name.lower()))
@@ -208,12 +188,11 @@ def _extract(url, index, album):
 
 
 @cli.command()
+@click.pass_obj
 @click.argument("names", nargs=-1, type=types.subreddit)
 @click.option("--ready/--not-ready", "-r/-R", default=None)
-def list_subs(names, ready):
-    db = connect_db()
-
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+def list_subs(con, names, ready):
+    cursor = con.db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     Opt = namedtuple("Opt", ("check", "cond"))
 
@@ -244,10 +223,9 @@ def list_subs(names, ready):
 
 
 @cli.command()
-def list_works():
-    db = connect_db()
-
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+@click.pass_obj
+def list_works(con):
+    cursor = con.db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     cursor.execute(
         """SELECT id, artist, title, series, nsfw, source_url, imgur_url

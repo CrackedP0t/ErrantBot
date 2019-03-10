@@ -1,6 +1,7 @@
 from click import ParamType
 import validators as val
 import regex
+from . import helper as h
 
 
 class URL(ParamType):
@@ -19,13 +20,13 @@ class FlairID(ParamType):
     val_flair_id = regex.compile(r"([a-f0-9]){8}-(?1){4}-(?1){4}-(?1){4}-(?1){12}")
 
     @classmethod
-    def process(cls, value):
+    def process(cls, value, ctx=None):
         value = value.lower()
 
-        if not cls.val_flair_id.fullmatch(value):
-            return False
-        else:
+        if cls.val_flair_id.fullmatch(value):
             return value
+        else:
+            return False
 
     def convert(self, value, param, ctx):
         processed = self.process(value)
@@ -62,7 +63,7 @@ class Submission(ParamType):
     name = "submission specifier"
 
     find_name = regex.compile(r"^[^@+]*")
-    find_flair_id = regex.compile(r"@([^+]*)")
+    find_flair_id = regex.compile(r"@((?:(?:%\+)|[^+])*)")
     find_tag = regex.compile(r"\+(.*)$")
 
     def convert(self, value, param, ctx):
@@ -75,10 +76,27 @@ class Submission(ParamType):
             self.fail("'{}' is not a valid subreddit name".format(name), param, ctx)
 
         flair_id = self.find_flair_id.search(value)
+
         if flair_id:
             flair_id = flair_id[1]
+
+            flair_id.replace("%%", "%")
+            flair_id.replace("%+", "+")
+
             if not FlairID.process(flair_id):
-                self.fail("'{}' is not a valid flair ID".format(flair_id), param, ctx)
+                sub = ctx.obj.reddit.subreddit(name)
+
+                for flair in sub.flair.link_templates:
+                    if flair_id in flair["text"]:
+                        flair_id = flair["id"]
+                        break
+                else:
+                    self.fail(
+                        "'{}' is not a valid flair ID, "
+                        "and does not match any flair text".format(flair_id),
+                        param,
+                        ctx,
+                    )
 
         tag = self.find_tag.search(value)
         if tag:
