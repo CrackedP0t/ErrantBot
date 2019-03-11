@@ -258,7 +258,9 @@ def list_works(con):
 def delete_post(con, id_type, delete, post_id):
     cursor = con.db.cursor()
 
-    if id_type == "submission":
+    use_reddit = id_type == "submission"
+
+    if not use_reddit:
         submission_id = post_id
 
         cursor.execute(
@@ -294,14 +296,14 @@ def delete_post(con, id_type, delete, post_id):
             if comment.author == con.reddit.user.me():
                 comment.delete()
 
-    if submission_id:
-        where = "id = %s"
-    else:
+    if use_reddit:
         where = "reddit_id = %s"
+    else:
+        where = "id = %s"
 
     cursor.execute(
         "UPDATE submissions SET reddit_id = NULL, submitted_on = NULL WHERE " + where,
-        (submission_id or reddit_id,),
+        (reddit_id if use_reddit else submission_id,),
     )
     con.db.commit()
 
