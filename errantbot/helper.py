@@ -106,7 +106,7 @@ def get_last(db, table):
     return cursor.fetchone()["id"]
 
 
-def do_post(db, reddit, row):
+def do_post(con, row):
     has_keys(
         row,
         (
@@ -125,7 +125,7 @@ def do_post(db, reddit, row):
         ),
     )
 
-    cursor = db.cursor()
+    cursor = con.db.cursor()
 
     cursor.execute(
         """SELECT last_submission_on, space_out, name, tag_series,
@@ -147,7 +147,7 @@ def do_post(db, reddit, row):
 
             return
 
-    sub = reddit.subreddit(sr_row["name"])
+    sub = con.reddit.subreddit(sr_row["name"])
 
     if sr_row["tag_series"]:
         series_tag = " [" + (row["series"] or "Original") + "]"
@@ -197,7 +197,7 @@ def do_post(db, reddit, row):
             (submission.id, int(submission.created_utc), row["submission_id"]),
         )
 
-        db.commit()
+        con.db.commit()
 
 
 def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
@@ -236,7 +236,7 @@ def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
     errecho("Posting...")
 
     for row in rows:
-        do_post(con.db, con.reddit, row)
+        do_post(con, row)
 
 
 def upload_to_imgur(con, work_ids=[], last=False, all=False):
@@ -384,6 +384,7 @@ def add_submissions(db, work_id, submissions):
         except psycopg2.IntegrityError as e:
             msg = {
                 "check_require_flair": "/r/{} requires a flair",
+                "check_require_series": "/r/{} requires a series",
                 "check_require_tag": "/r/{} requires a tag",
                 "already_exists": "/r/{} already has this work",
             }.get(e.diag.constraint_name, None)

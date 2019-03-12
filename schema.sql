@@ -27,6 +27,17 @@ $$;
 
 
 --
+-- Name: check_require_series(integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_require_series(work_id integer, subreddit_id integer) RETURNS boolean
+    LANGUAGE sql
+    AS $$
+    SELECT EXISTS(SELECT FROM subreddits WHERE id = subreddit_id AND NOT require_series) OR EXISTS(SELECT FROM works WHERE id = work_id AND series IS NOT NULL);
+$$;
+
+
+--
 -- Name: check_require_tag(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -73,6 +84,7 @@ CREATE TABLE public.submissions (
     submitted_on timestamp without time zone,
     flair_id character varying,
     CONSTRAINT check_require_flair CHECK (public.check_require_flair(flair_id, subreddit_id)),
+    CONSTRAINT check_require_series CHECK (public.check_require_series(work_id, subreddit_id)),
     CONSTRAINT check_require_tag CHECK (public.check_require_tag(custom_tag, subreddit_id))
 );
 
@@ -110,7 +122,8 @@ CREATE TABLE public.subreddits (
     last_submission_on timestamp without time zone,
     require_flair boolean DEFAULT false NOT NULL,
     require_tag boolean DEFAULT false NOT NULL,
-    space_out boolean DEFAULT true NOT NULL
+    space_out boolean DEFAULT true NOT NULL,
+    require_series boolean DEFAULT false NOT NULL
 );
 
 
