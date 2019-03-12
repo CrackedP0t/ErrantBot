@@ -129,11 +129,15 @@ def do_post(con, row):
 
     cursor.execute(
         """SELECT last_submission_on, space_out, name, tag_series,
-        rehost, flair_id FROM subreddits WHERE id = %s""",
+        rehost, flair_id, disabled FROM subreddits WHERE id = %s""",
         (row["subreddit_id"],),
     )
 
     sr_row = cursor.fetchone()
+
+    if sr_row["disabled"]:
+        errecho("\t/r/{} is disabled")
+        return False
 
     if sr_row["space_out"] and sr_row["last_submission_on"] is not None:
         since = datetime.utcnow() - sr_row["last_submission_on"]
@@ -145,7 +149,7 @@ def do_post(con, row):
                 "you can try again in {}".format(sr_row["name"], wait)
             )
 
-            return
+            return False
 
     sub = con.reddit.subreddit(sr_row["name"])
 
@@ -178,6 +182,8 @@ def do_post(con, row):
                 sr_row["name"], e.error_type, e.message
             )
         )
+
+        return False
     else:
         errecho(
             "\tSubmitted to /r/{} at https://reddit.com{}".format(
@@ -198,6 +204,8 @@ def do_post(con, row):
         )
 
         con.db.commit()
+
+        return True
 
 
 def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
