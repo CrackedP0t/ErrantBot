@@ -355,21 +355,44 @@ def save_work(db, title, series, artist, source_url, nsfw, source_image_url):
     return work_id
 
 
-def add_subreddit(
-    db, name, tag_series, flair_id, rehost, require_flair, require_tag, space_out
+def edit_subreddits(
+    con,
+    names,
+    tag_series,
+    flair_id,
+    rehost,
+    require_flair,
+    require_tag,
+    space_out,
+    disabled,
 ):
-    cursor = db.cursor()
+    cursor = con.db.cursor()
 
-    cursor.execute(
-        """INSERT INTO subreddits (name, tag_series, flair_id,
-        rehost, require_flair, require_tag, space_out)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (name) DO UPDATE SET tag_series = %s, flair_id = %s, rehost = %s,
-        require_flair = %s, require_tag = %s, space_out = %s""",
-        (name,)
-        + (tag_series, flair_id, rehost, require_flair, require_tag, space_out) * 2,
-    )
-    db.commit()
+    for name in names:
+        status = subreddit_status(name, con.reddit)
+
+        if not status:
+            errecho("\t/r/{} is {}".format(name, status.name.lower()))
+        else:
+            cursor.execute(
+                """INSERT INTO subreddits (name, tag_series, flair_id,
+                rehost, require_flair, require_tag, space_out, disabled)
+                VALUES (%{n}, %{s}, %{i}, %{r}, %{f}, %{t}, %{o}, %{d})
+                ON CONFLICT (name) DO UPDATE SET
+                tag_series = %{s}, flair_id = %{i}, rehost = %{r}, require_flair = %{f},
+                require_tag = %{t}, space_out = %{o}, disabled = %{d}""",
+                {
+                    "n": name,
+                    "s": tag_series,
+                    "i": flair_id,
+                    "r": rehost,
+                    "f": require_flair,
+                    "t": require_tag,
+                    "o": space_out,
+                    "d": disabled,
+                },
+            )
+            con.db.commit()
 
 
 def add_submissions(db, work_id, submissions):

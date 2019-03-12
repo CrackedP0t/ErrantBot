@@ -84,30 +84,35 @@ def add_custom(
 
 @cli.command()
 @click.pass_obj
-@click.argument("name", required=True, type=types.subreddit)
+@click.argument("names", type=types.subreddit, nargs=-1)
 @click.option("--tag-series/--no-tag-series", "-s/-S", default=False)
 @click.option("--flair-id", "-f", type=types.flair_id)
 @click.option("--rehost/--no-rehost", "-r/-R", default=True)
 @click.option("--require-flair/--no-require-flair", "-q/-Q", default=False)
 @click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
 @click.option("--space-out/--no-space-out", "-o/-O", default=True)
-def add_sub(
-    con, name, tag_series, flair_id, rehost, require_flair, require_tag, space_out
+@click.option("--disabled/--enabled", "-d/-D", default=False)
+def edit_sr(
+    con,
+    names,
+    tag_series,
+    flair_id,
+    rehost,
+    require_flair,
+    require_tag,
+    space_out,
+    disabled,
 ):
-    status = h.subreddit_status(name, con.reddit)
-
-    if not status:
-        raise click.ClickException("/r/{} is {}".format(name, status.name.lower()))
-
-    h.add_subreddit(
-        con.db,
-        name,
+    h.edit_subreddits(
+        con,
+        names,
         tag_series,
         flair_id,
         rehost,
         require_flair,
         require_tag,
         space_out,
+        disabled,
     )
 
 

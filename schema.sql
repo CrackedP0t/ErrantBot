@@ -123,7 +123,8 @@ CREATE TABLE public.subreddits (
     require_flair boolean DEFAULT false NOT NULL,
     require_tag boolean DEFAULT false NOT NULL,
     space_out boolean DEFAULT true NOT NULL,
-    require_series boolean DEFAULT false NOT NULL
+    require_series boolean DEFAULT false NOT NULL,
+    disabled boolean DEFAULT false NOT NULL
 );
 
 
