@@ -136,7 +136,7 @@ def do_post(con, row):
     sr_row = cursor.fetchone()
 
     if sr_row["disabled"]:
-        errecho("\t/r/{} is disabled")
+        errecho("\t/r/{} is disabled".format(sr_row["name"]))
         return False
 
     if sr_row["space_out"] and sr_row["last_submission_on"] is not None:
@@ -225,13 +225,13 @@ def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
     cursor.execute(
         """SELECT title, series, artist, source_url, imgur_url, nsfw,
         source_image_url, custom_tag, submissions.id as submission_id,
-        source_image_urls, subreddit_id, flair_id
+        source_image_urls, subreddit_id, submissions.flair_id
         FROM works
         INNER JOIN submissions
         ON submissions.reddit_id IS NULL
         AND submissions.work_id = works.id"""
         + (" AND works.id = ANY(%s)" if not all else "")
-        + (" AND subreddits.name = ANY(%s)" if submissions else ""),
+        + (" INNER JOIN subreddits ON subreddits.name = ANY(%s)" if submissions else ""),
         (work_ids, list(submissions.names)) if submissions else (work_ids,),
     )
 
