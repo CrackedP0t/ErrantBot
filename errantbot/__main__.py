@@ -1,16 +1,20 @@
+import warnings
+
 import click
-from . import extract, helper as h, paramtypes as types
-import psycopg2
-import psycopg2.extras
-from tabulate import tabulate
-from collections import namedtuple
 import validators as val
 from praw.models import Submission
+from sqlalchemy import sql
+from tabulate import tabulate
+
+from . import extract
+from . import helper as h
+from . import paramtypes as types
 
 
 @click.group()
 @click.pass_context
 def cli(ctx):
+    warnings.filterwarnings("ignore", r"Could not parse CHECK constraint text")
     ctx.obj = h.Connections()
 
 
@@ -40,7 +44,7 @@ def add(con, source_url, submissions, title, artist, series, nsfw, index, album,
     submissions = h.Submissions(submissions)
 
     work_id = h.save_work(
-        con.db,
+        con,
         work.title,
         work.series,
         work.artist,
@@ -49,7 +53,7 @@ def add(con, source_url, submissions, title, artist, series, nsfw, index, album,
         work.image_url,
     )
 
-    h.add_submissions(con.db, work_id, submissions)
+    h.add_submissions(con, work_id, submissions)
 
     h.upload_to_imgur(con, work_id)
 
@@ -72,12 +76,12 @@ def add_custom(
     submissions = h.Submissions(submissions)
 
     work_id = h.save_work(
-        con.db, title, series, artist, source_url, nsfw, source_image_url
+        con, title, series, artist, source_url, nsfw, source_image_url
     )
 
-    h.add_submissions(con.db, work_id, submissions)
+    h.add_submissions(con, work_id, submissions)
 
-    h.upload_to_imgur(con.db, work_id)
+    h.upload_to_imgur(con, work_id)
 
     h.post_submissions(con, work_id)
 
@@ -90,6 +94,7 @@ def add_custom(
 @click.option("--rehost/--no-rehost", "-r/-R", default=True)
 @click.option("--require-flair/--no-require-flair", "-q/-Q", default=False)
 @click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
+@click.option("--require-series/--no-require-series", "-e/-E", default=False)
 @click.option("--space-out/--no-space-out", "-o/-O", default=True)
 @click.option("--disabled/--enabled", "-d/-D", default=False)
 def edit_sr(
@@ -100,6 +105,7 @@ def edit_sr(
     rehost,
     require_flair,
     require_tag,
+    require_series,
     space_out,
     disabled,
 ):
@@ -111,6 +117,7 @@ def edit_sr(
         rehost,
         require_flair,
         require_tag,
+        require_series,
         space_out,
         disabled,
     )
@@ -123,7 +130,7 @@ def edit_sr(
 def crosspost(con, work_id, submissions):
     submissions = h.Submissions(submissions)
 
-    h.add_submissions(con.db, work_id, submissions)
+    h.add_submissions(con, work_id, submissions)
 
     h.post_submissions(con, work_id, submissions)
 
@@ -134,9 +141,9 @@ def crosspost(con, work_id, submissions):
 def crosspost_last(con, submissions):
     submissions = h.Submissions(submissions)
 
-    work_id = h.get_last(con.db, "works")
+    work_id = h.get_last(con, "works")
 
-    h.add_submissions(con.db, work_id, submissions)
+    h.add_submissions(con, work_id, submissions)
 
     h.post_submissions(con, work_id, submissions)
 
@@ -152,13 +159,13 @@ def retry_post(con, work_ids, last):
 @cli.command()
 @click.pass_obj
 def retry_all_posts(con):
-    h.post_submissions(con, all=True)
+    h.post_submissions(con, do_all=True)
 
 
 @cli.command()
 @click.pass_obj
 def retry_all_uploads(con):
-    h.upload_to_imgur(con.db, all=True)
+    h.upload_to_imgur(con, do_all=True)
 
 
 @cli.command()
@@ -166,7 +173,7 @@ def retry_all_uploads(con):
 @click.argument("work-ids", type=int, nargs=-1)
 @click.option("--last", "-l", is_flag=True)
 def retry_upload(con, work_ids, last):
-    h.upload_to_imgur(con.db, work_ids, last=last)
+    h.upload_to_imgur(con, work_ids, last=last)
 
 
 @cli.command()
@@ -209,49 +216,49 @@ def _extract(url, index, album):
 @click.argument("names", nargs=-1, type=types.subreddit)
 @click.option("--ready/--not-ready", "-r/-R", default=None)
 def list_subs(con, names, ready):
-    cursor = con.db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    sr_table = con.meta.tables["subreddits"]
+    sub_table = con.meta.tables["submissions"]
 
-    Opt = namedtuple("Opt", ("check", "cond"))
-
-    opts = (
-        Opt(len(names) > 0, "subreddits.name IN %s"),
-        Opt(ready is True, "last_submission_on < NOW() - INTERVAL '1 day'"),
-        Opt(ready is False, "last_submission_on > NOW() - INTERVAL '1 day'"),
+    query = (
+        sql.select(
+            sr_table.c
+            + [
+                sql.select([sql.func.count()])
+                .select_from(sub_table)
+                .where(sub_table.c.subreddit_id == sr_table.c.id)
+                .label("post_count")
+            ]
+        )
+        .select_from(sr_table)
+        .order_by("id")
     )
 
-    opts = tuple(filter(lambda opt: opt.check, opts))
+    if len(names) > 0:
+        query = query.where(sr_table.c.name.in_(names))
+    if ready is True:
+        query = query.where(
+            sr_table.c.last_submission_on
+            < sql.func.now() - sql.text("INTERVAL '1 day'")
+        )
+    if ready is False:
+        query = query.where(
+            sr_table.c.last_submission_on
+            > sql.func.now() - sql.text("INTERVAL '1 day'")
+        )
 
-    if len(opts) == 0:
-        where = ""
-    else:
-        where = " WHERE " + " AND ".join(map(lambda opt: opt.cond, opts))
+    result = con.db.execute(query)
 
-    query = """SELECT id, name, tag_series, flair_id, rehost, require_flair, require_tag,
-    last_submission_on,
-    (SELECT COUNT(*) FROM submissions WHERE subreddit_id = subreddits.id) post_count
-    FROM subreddits{} ORDER BY id""".format(
-        where
-    )
-
-    cursor.execute(query, (names,))
-    rows = cursor.fetchall()
-
-    click.echo(tabulate(rows, headers="keys"))
+    click.echo(tabulate(result.fetchall(), headers=result.keys()))
 
 
 @cli.command()
 @click.pass_obj
 def list_works(con):
-    cursor = con.db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    query = con.meta.tables["works"].select()
 
-    cursor.execute(
-        """SELECT id, artist, title, series, nsfw, source_url, imgur_url
-        FROM works"""
-    )
+    result = con.db.execute(query)
 
-    rows = cursor.fetchall()
-
-    click.echo(tabulate(rows, headers="keys"))
+    click.echo(tabulate(result.fetchall(), headers=result.keys()))
 
 
 @cli.command()
@@ -261,17 +268,17 @@ def list_works(con):
 @click.option("--delete/--no-delete", "-d/-D", default=True)
 @click.argument("post-id")
 def delete_post(con, id_type, delete, post_id):
-    cursor = con.db.cursor()
+    submissions = con.meta.tables["submissions"]
 
     use_reddit = id_type == "submission"
 
     if not use_reddit:
         submission_id = post_id
 
-        cursor.execute(
-            "SELECT reddit_id FROM submissions WHERE id = %s", (submission_id,)
+        query = sql.select([submissions.c.reddit_id]).where(
+            submissions.c.id == submission_id
         )
-        row = cursor.fetchone()
+        row = con.db.execute(query).first()
 
         if row is None:
             raise click.ClickException(
@@ -279,18 +286,13 @@ def delete_post(con, id_type, delete, post_id):
             )
 
         reddit_id = row["reddit_id"]
-
-        if reddit_id is None:
-            raise click.ClickException(
-                "Submission #{} has no reddit post".format(submission_id)
-            )
     else:
         reddit_id = post_id
 
         if val.url(reddit_id):
             reddit_id = Submission.id_from_url(reddit_id)
 
-    if delete:
+    if delete and reddit_id:
         sub = con.reddit.submission(reddit_id)
 
         sub.delete()
@@ -301,16 +303,13 @@ def delete_post(con, id_type, delete, post_id):
             if comment.author == con.reddit.user.me():
                 comment.delete()
 
+    query = submissions.update().values(reddit_id=None, submitted_on=None)
     if use_reddit:
-        where = "reddit_id = %s"
+        query = query.where(submissions.c.reddit_id == reddit_id)
     else:
-        where = "id = %s"
+        query = query.where(submissions.c.id == submission_id)
 
-    cursor.execute(
-        "UPDATE submissions SET reddit_id = NULL, submitted_on = NULL WHERE " + where,
-        (reddit_id if use_reddit else submission_id,),
-    )
-    con.db.commit()
+    con.db.execute(query)
 
 
 if __name__ == "__main__":

@@ -1,13 +1,15 @@
+from collections import namedtuple
+from urllib.parse import parse_qs, quote, urlparse
+
+import click
 import regex
 import requests
-import tldextract
-from urllib.parse import urlparse, parse_qs, quote
-from collections import namedtuple
-from pixivpy3 import AppPixivAPI
 from bs4 import BeautifulSoup
-import click
-from . import helper as h
 
+import tldextract
+from pixivpy3 import AppPixivAPI
+
+from . import helper as h
 
 Work = namedtuple(
     "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]

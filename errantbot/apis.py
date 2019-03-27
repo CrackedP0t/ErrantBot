@@ -1,12 +1,15 @@
+import json
+import os
+import secrets
+import socket
+from urllib.parse import quote, urlparse
+
+import click
+
 import praw
 from requests_oauthlib import OAuth2Session
-import os
-import json
-import socket
-import secrets
-import click
+
 from . import helper as h
-from urllib.parse import quote, urlparse
 
 
 def receive_connection():

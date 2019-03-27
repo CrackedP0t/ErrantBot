@@ -6,18 +6,23 @@ name = "pypi"
 [packages]
 praw = "*"
 tomlkit = "*"
-slumber = "*"
 requests-oauthlib = "*"
 "beautifulsoup4" = "*"
 regex = "*"
 tldextract = "*"
 click = "*"
-psycopg2-binary = "*"
 pixivpy = "*"
 tabulate = "*"
 validators = "*"
+requests = "*"
+sqlalchemy = "*"
+psycopg2-binary = "*"
 
 [dev-packages]
+python-language-server = {extras = ["pyflakes", "rope"],version = "*"}
+isort = "*"
+ptpython = "*"
+black = "*"
 
 [requires]
 python_version = "3.7"

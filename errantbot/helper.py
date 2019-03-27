@@ -1,17 +1,21 @@
-import click
-import tomlkit
-from . import apis
-from datetime import timedelta, datetime
-from prawcore import exceptions
-import praw
 import enum
-import psycopg2
-from psycopg2 import sql, extras
+from datetime import datetime, timedelta
+
+import click
+import praw
+import tomlkit
+from prawcore import exceptions
+from psycopg2 import errorcodes
+from sqlalchemy import MetaData, create_engine, exc, sql
+from sqlalchemy.sql import bindparam as bp
+from sqlalchemy.sql import select
+
+from . import apis
 
 
-def has_keys(d, l):
-    for k in l:
-        if k not in d:
+def has_keys(dictionary, keys):
+    for k in keys:
+        if k not in dictionary:
             raise ValueError("Key {} not found in row".format(k))
 
 
@@ -39,71 +43,59 @@ def get_secrets():
         return tomlkit.parse(secrets_file.read())
 
 
-def connect_imgur():
-    click.echo("Connecting to Imgur...", err=True)
-    secrets = get_secrets()["imgur"]
-
-    imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
-
-    imgur.authenticate()
-
-    errecho("\tAuthentication complete")
-
-    return imgur
-
-
-def connect_reddit():
-    errecho("Connecting to Reddit...")
-
-    reddit = apis.Reddit(get_secrets()["reddit"])
-
-    reddit.authenticate()
-
-    return reddit.reddit
-
-
-def connect_db():
-    errecho("Connecting to database...")
-
-    secrets = get_secrets()["database"]
-
-    db = psycopg2.connect(
-        user=secrets["user"],
-        password=secrets["password"],
-        dbname=secrets["name"],
-        cursor_factory=extras.DictCursor,
-    )
-
-    errecho("\tConnected")
-
-    return db
-
-
 class Connections:
     def __getattr__(self, name):
         if name == "imgur":
-            self.imgur = connect_imgur()
+            self.connect_imgur()
             return self.imgur
         elif name == "reddit":
-            self.reddit = connect_reddit()
+            self.connect_reddit()
             return self.reddit
-        elif name == "db":
-            self.db = connect_db()
-            return self.db
+        elif name == "db" or name == "meta" or name == "engine":
+            self.connect_db()
+            return getattr(self, name)
         else:
             raise AttributeError("{} is not a valid connection name".format(name))
 
+    def connect_imgur(self):
+        click.echo("Connecting to Imgur...", err=True)
+        secrets = get_secrets()["imgur"]
 
-def get_last(db, table):
-    cursor = db.cursor()
+        self.imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
 
-    cursor.execute(
-        sql.SQL("SELECT id FROM {} ORDER BY id DESC LIMIT 1").format(
-            sql.Identifier(table)
+        self.imgur.authenticate()
+
+        errecho("\tAuthentication complete")
+
+    def connect_reddit(self):
+        errecho("Connecting to Reddit...")
+
+        reddit = apis.Reddit(get_secrets()["reddit"])
+
+        reddit.authenticate()
+
+        self.reddit = reddit.reddit
+
+    def connect_db(self):
+        errecho("Connecting to database...")
+
+        secrets = get_secrets()["database"]
+
+        self.db = create_engine(
+            "postgresql://{user}:{password}@{host}/{name}".format(**secrets)
         )
-    )
 
-    return cursor.fetchone()["id"]
+        self.meta = MetaData(bind=self.db)
+        self.meta.reflect()
+
+        errecho("\tConnected")
+
+
+def get_last(con, table):
+
+    return con.db.execute(
+        con.meta.tables[table].select().order_by(sql.desc("id")).limit(1)
+    ).first()["id"]
 
 
 def do_post(con, row):
@@ -125,15 +117,13 @@ def do_post(con, row):
         ),
     )
 
-    cursor = con.db.cursor()
-
-    cursor.execute(
-        """SELECT last_submission_on, space_out, name, tag_series,
-        rehost, flair_id, disabled FROM subreddits WHERE id = %s""",
-        (row["subreddit_id"],),
-    )
-
-    sr_row = cursor.fetchone()
+    sr_row = con.db.execute(
+        sql.text(
+            """SELECT last_submission_on, space_out, name, tag_series,
+        rehost, flair_id, disabled FROM subreddits WHERE id = :id"""
+        ),
+        id=row["subreddit_id"],
+    ).first()
 
     if sr_row["disabled"]:
         errecho("\t/r/{} is disabled".format(sr_row["name"]))
@@ -196,20 +186,23 @@ def do_post(con, row):
 
         submission.reply("[Source]({})".format(row["source_url"]))
 
-        cursor.execute(
-            """UPDATE submissions SET reddit_id = %s,
-            submitted_on = to_timestamp(%s) AT TIME ZONE 'utc'
-            WHERE id = %s""",
-            (submission.id, int(submission.created_utc), row["submission_id"]),
+        con.db.execute(
+            sql.text(
+                """UPDATE submissions SET reddit_id = :reddit_id,
+            submitted_on = to_timestamp(:time) AT TIME ZONE 'utc'
+            WHERE id = :id"""
+            ),
+            reddit_id=submission.id,
+            time=int(submission.created_utc),
+            id=row["submission_id"],
         )
-
-        con.db.commit()
 
         return True
 
 
-def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
-    cursor = con.db.cursor()
+def post_submissions(con, work_ids=None, submissions=None, do_all=False, last=False):
+    if work_ids is None:
+        work_ids = []
 
     if not isinstance(work_ids, list):
         if hasattr(work_ids, "__iter__"):
@@ -218,24 +211,31 @@ def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
             work_ids = [work_ids]
 
     if last:
-        work_ids.append(get_last(con.db, "works"))
+        work_ids.append(get_last(con, "works"))
 
-    submissions = False if all else submissions
+    submissions = False if do_all else submissions
 
-    cursor.execute(
+    query = sql.text(
         """SELECT title, series, artist, source_url, imgur_url, nsfw,
         source_image_url, custom_tag, submissions.id as submission_id,
-        source_image_urls, subreddit_id, submissions.flair_id
+        source_image_urls, subreddit_id, submissions.flair_id, reddit_id
         FROM works
         INNER JOIN submissions
-        ON submissions.reddit_id IS NULL
-        AND submissions.work_id = works.id"""
-        + (" AND works.id = ANY(%s)" if not all else "")
-        + (" INNER JOIN subreddits ON subreddits.name = ANY(%s)" if submissions else ""),
-        (work_ids, list(submissions.names)) if submissions else (work_ids,),
+        ON reddit_id IS NULL
+        AND work_id = works.id"""
+        + (" AND works.id = ANY(:work_ids)" if not do_all else "")
+        + (
+            " INNER JOIN subreddits ON subreddits.name = ANY(:names)"
+            if submissions
+            else ""
+        )
     )
 
-    rows = cursor.fetchall()
+    rows = con.db.execute(
+        query,
+        work_ids=work_ids if not do_all else None,
+        names=list(submissions.names) if submissions else None,
+    ).fetchall()
 
     if len(rows) == 0:
         errecho("No works require posting")
@@ -247,8 +247,10 @@ def post_submissions(con, work_ids=[], submissions=None, all=False, last=False):
         do_post(con, row)
 
 
-def upload_to_imgur(con, work_ids=[], last=False, all=False):
-    if not all:
+def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
+    works = con.meta.tables["works"]
+
+    if not do_all:
         if not isinstance(work_ids, list):
             if hasattr(work_ids, "__iter__"):
                 work_ids = list(work_ids)
@@ -256,22 +258,19 @@ def upload_to_imgur(con, work_ids=[], last=False, all=False):
                 work_ids = [work_ids]
 
         if last:
-            work_ids.append(get_last(con.db, "works"))
+            work_ids.append(get_last(con, "works"))
 
-    cursor = con.db.cursor()
-
-    cursor.execute(
-        """SELECT title, artist, source_image_url, source_image_urls,
+    rows = con.db.execute(
+        sql.text(
+            """SELECT title, artist, source_image_url, source_image_urls,
         source_url, imgur_url, id, is_album
-        FROM works WHERE imgur_id IS NULL""".format(
-            "" if any else "id = ANY(%s) AND "
+        FROM works WHERE imgur_id IS NULL"""
+            + ("" if do_all else " AND id = ANY(:work_ids)")
         ),
-        (work_ids,) if any else (),
-    )
+        work_ids=None if do_all else work_ids,
+    ).fetchall()
 
-    rows = cursor.fetchall()
-
-    if len(rows) == 0:
+    if not rows:
         errecho("No works require uploading")
         return
 
@@ -297,24 +296,20 @@ def upload_to_imgur(con, work_ids=[], last=False, all=False):
 
             errecho("Created album at {}".format(link))
 
-            cursor.execute(
-                """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
-                (album_id, link, row["id"]),
+            con.db.execute(
+                works.update()
+                .values(imgur_id=album_id, imgur_url=link)
+                .where(works["id"] == row["id"])
             )
 
-            con.db.commit()
-
-            counter = 0
-            for image_url in row["source_image_urls"]:
-                counter += 1
-
+            for index, image_url in enumerate(row["source_image_urls"]):
                 resp = con.imgur.upload_url(image_url, album_id=album_id)
 
                 resp.raise_for_status()
 
                 data = resp.json()["data"]
 
-                errecho("Uploaded image #{} to {}".format(counter, data["link"]))
+                errecho("Uploaded image #{} to {}".format(index, data["link"]))
 
         else:
             resp = con.imgur.upload_url(row["source_image_url"], title, description)
@@ -323,32 +318,37 @@ def upload_to_imgur(con, work_ids=[], last=False, all=False):
 
             data = resp.json()["data"]
 
-            cursor.execute(
-                """UPDATE works SET imgur_id=%s, imgur_url=%s WHERE id=%s""",
-                (data["id"], data["link"], row["id"]),
+            con.db.execute(
+                works.update()
+                .values(imgur_id=data["id"], imgur_url=data["link"])
+                .where(works.id == row["id"])
             )
-            con.db.commit()
 
             errecho("\tUploaded at {}".format(data["link"]))
 
 
-def save_work(db, title, series, artist, source_url, nsfw, source_image_url):
+def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
     errecho("Saving to database...")
-
-    cursor = db.cursor()
+    works = con.meta.tables["works"]
 
     is_album = isinstance(source_image_url, list)
 
-    cursor.execute(
-        """INSERT INTO works (title, series, artist, source_url, nsfw, is_album, {})
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;""".format(
-            "source_image_urls" if is_album else "source_image_url"
-        ),
-        (title, series, artist, source_url, nsfw, is_album, source_image_url),
-    )
-    db.commit()
+    values = {
+        "title": title,
+        "series": series,
+        "artist": artist,
+        "source_url": source_url,
+        "nsfw": nsfw,
+    }
 
-    work_id = cursor.fetchone()[0]
+    if is_album:
+        values["source_image_urls"] = source_image_url
+    else:
+        values["source_image_url"] = source_image_url
+
+    query = works.insert(values=values).returning(works.c.id)
+
+    work_id = con.db.execute(query).first()["id"]
 
     errecho("\tSaved with id {}".format(work_id))
 
@@ -363,81 +363,83 @@ def edit_subreddits(
     rehost,
     require_flair,
     require_tag,
+    require_series,
     space_out,
     disabled,
 ):
-    cursor = con.db.cursor()
-
     for name in names:
         status = subreddit_status(name, con.reddit)
 
         if not status:
             errecho("\t/r/{} is {}".format(name, status.name.lower()))
         else:
-            cursor.execute(
-                """INSERT INTO subreddits (name, tag_series, flair_id,
+            con.db.execute(
+                sql.text(
+                    """INSERT INTO subreddits (name, tag_series, flair_id,
                 rehost, require_flair, require_tag, space_out, disabled)
-                VALUES (%{n}, %{s}, %{i}, %{r}, %{f}, %{t}, %{o}, %{d})
+                VALUES (:name, :tag_series, :flair_id, :rehost, :require_flair,
+                :require_tag, :space_out, :disabled)
                 ON CONFLICT (name) DO UPDATE SET
-                tag_series = %{s}, flair_id = %{i}, rehost = %{r}, require_flair = %{f},
-                require_tag = %{t}, space_out = %{o}, disabled = %{d}""",
-                {
-                    "n": name,
-                    "s": tag_series,
-                    "i": flair_id,
-                    "r": rehost,
-                    "f": require_flair,
-                    "t": require_tag,
-                    "o": space_out,
-                    "d": disabled,
-                },
+                tag_series = :tag_series, flair_id = :flair_id, rehost = :rehost,
+                require_flair = :require_flair, require_tag = :require_tag,
+                require_series = :require_series, space_out = :space_out,
+                disabled = :disabled"""
+                ),
+                name=name,
+                flair_id=flair_id,
+                tag_series=tag_series,
+                rehost=rehost,
+                require_flair=require_flair,
+                require_tag=require_tag,
+                require_series=require_series,
+                space_out=space_out,
+                disabled=disabled,
             )
-            con.db.commit()
 
 
-def add_submissions(db, work_id, submissions):
+def add_submissions(con, work_id, specifiers):
     errecho("Adding submissions...")
+    submissions = con.meta.tables["submissions"]
+    subreddits = con.meta.tables["subreddits"]
 
-    cursor = db.cursor()
+    query = submissions.insert().values(
+        work_id=work_id,
+        subreddit_id=select([subreddits.c.id]).where(
+            subreddits.c.name == bp("subreddit_name")
+        ),
+        flair_id=bp("flair_id"),
+        custom_tag=bp("custom_tag"),
+    )
 
-    for triple in submissions.n_f_t:
-        if not subreddit_known(db, triple[0]):
-            errecho("\t/r/{} is unknown".format(triple[0]))
-            continue
+    for triple in specifiers.n_f_t:
         try:
-            cursor.execute(
-                """INSERT INTO submissions (work_id, subreddit_id, flair_id, custom_tag)
-                SELECT %s, id, data.flair_id, tag FROM subreddits
-                INNER JOIN (VALUES %s) AS data (subname, flair_id, tag)
-                ON subreddits.name = data.subname""",
-                (work_id, triple),
+            con.db.execute(
+                query,
+                subreddit_name=triple[0],
+                flair_id=triple[1],
+                custom_tag=triple[2],
             )
-        except psycopg2.IntegrityError as e:
+
+        except exc.IntegrityError as e:
             msg = {
                 "check_require_flair": "/r/{} requires a flair",
                 "check_require_series": "/r/{} requires a series",
                 "check_require_tag": "/r/{} requires a tag",
                 "already_exists": "/r/{} already has this work",
-            }.get(e.diag.constraint_name, None)
+            }.get(e.orig.diag.constraint_name, None)
+
+            if (
+                e.orig.pgcode == errorcodes.NOT_NULL_VIOLATION
+                and e.orig.diag.column_name == "subreddit_id"
+            ):
+                msg = "/r/{} is unknown"
 
             if not msg:
                 raise e
 
             errecho("\t" + msg.format(triple[0]))
-            db.rollback()
         else:
             errecho("\tAdded to /r/{}".format(triple[0]))
-            db.commit()
-
-
-def subreddit_known(db, subreddit_name):
-    cursor = db.cursor()
-
-    cursor.execute("""SELECT id FROM subreddits WHERE name = %s""", (subreddit_name,))
-
-    row = cursor.fetchone()
-
-    return bool(row)
 
 
 class SubStatus(enum.Enum):
