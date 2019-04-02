@@ -97,7 +97,7 @@ def add_custom(
 @click.option("--require-series/--no-require-series", "-e/-E", default=False)
 @click.option("--space-out/--no-space-out", "-o/-O", default=True)
 @click.option("--disabled/--enabled", "-d/-D", default=False)
-def edit_sr(
+def sr(
     con,
     names,
     tag_series,

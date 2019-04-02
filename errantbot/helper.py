@@ -7,6 +7,7 @@ import tomlkit
 from prawcore import exceptions
 from psycopg2 import errorcodes
 from sqlalchemy import MetaData, create_engine, exc, sql
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql import bindparam as bp
 from sqlalchemy.sql import select
 
@@ -321,7 +322,7 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
             con.db.execute(
                 works.update()
                 .values(imgur_id=data["id"], imgur_url=data["link"])
-                .where(works.id == row["id"])
+                .where(works.c.id == row["id"])
             )
 
             errecho("\tUploaded at {}".format(data["link"]))

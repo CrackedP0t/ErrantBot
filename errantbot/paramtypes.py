@@ -87,7 +87,7 @@ class Submission(ParamType):
                 sub = ctx.obj.reddit.subreddit(name)
 
                 for flair in sub.flair.link_templates:
-                    if flair_id in flair["text"]:
+                    if flair_id.lower() in flair["text"].lower():
                         flair_id = flair["id"]
                         break
                 else:
