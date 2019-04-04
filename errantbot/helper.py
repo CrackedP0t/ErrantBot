@@ -1,17 +1,18 @@
 import enum
 from datetime import datetime, timedelta
+import logging
 
-import click
 import praw
 import tomlkit
 from prawcore import exceptions
 from psycopg2 import errorcodes
 from sqlalchemy import MetaData, create_engine, exc, sql
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql import bindparam as bp
 from sqlalchemy.sql import select
 
 from . import apis
+
+log = logging.getLogger(__name__)
 
 
 def has_keys(dictionary, keys):
@@ -34,11 +35,6 @@ class Submissions:
         self.length = len(self.n_f_t)
 
 
-def errecho(*args, **kwargs):
-    kwargs["err"] = True
-    click.echo(*args, **kwargs)
-
-
 def get_secrets():
     with open("secrets.toml") as secrets_file:
         return tomlkit.parse(secrets_file.read())
@@ -59,17 +55,15 @@ class Connections:
             raise AttributeError("{} is not a valid connection name".format(name))
 
     def connect_imgur(self):
-        click.echo("Connecting to Imgur...", err=True)
+        log.info("Connecting to Imgur")
         secrets = get_secrets()["imgur"]
 
         self.imgur = apis.Imgur(secrets["client_id"], secrets["client_secret"])
 
         self.imgur.authenticate()
 
-        errecho("\tAuthentication complete")
-
     def connect_reddit(self):
-        errecho("Connecting to Reddit...")
+        log.info("Connecting to Reddit")
 
         reddit = apis.Reddit(get_secrets()["reddit"])
 
@@ -78,7 +72,7 @@ class Connections:
         self.reddit = reddit.reddit
 
     def connect_db(self):
-        errecho("Connecting to database...")
+        log.info("Connecting to database")
 
         secrets = get_secrets()["database"]
 
@@ -88,8 +82,6 @@ class Connections:
 
         self.meta = MetaData(bind=self.db)
         self.meta.reflect()
-
-        errecho("\tConnected")
 
 
 def get_last(con, table):
@@ -127,7 +119,7 @@ def do_post(con, row):
     ).first()
 
     if sr_row["disabled"]:
-        errecho("\t/r/{} is disabled".format(sr_row["name"]))
+        log.warning("/r/%s is disabled", sr_row["name"])
         return False
 
     if sr_row["space_out"] and sr_row["last_submission_on"] is not None:
@@ -135,9 +127,10 @@ def do_post(con, row):
         if since < timedelta(days=1):
             wait = timedelta(days=1) - since
             wait = timedelta(wait.days, wait.seconds)
-            errecho(
-                "\tSubmitted to /r/{} less than one day ago; "
-                "you can try again in {}".format(sr_row["name"], wait)
+            log.warning(
+                "Submitted to /r/%s less than one day ago; you can try again in %s",
+                sr_row["name"],
+                wait,
             )
 
             return False
@@ -168,18 +161,19 @@ def do_post(con, row):
             title, url=url, flair_id=row["flair_id"] or sr_row["flair_id"]
         )
     except praw.exceptions.APIException as e:
-        errecho(
-            "\tCouldn't submit to /r/{} - got error {}: '{}'".format(
-                sr_row["name"], e.error_type, e.message
-            )
+        log.warning(
+            "Couldn't submit to /r/%s - got error %s: '%s'",
+            sr_row["name"],
+            e.error_type,
+            e.message,
         )
 
         return False
     else:
-        errecho(
-            "\tSubmitted to /r/{} at https://reddit.com{}".format(
-                sr_row["name"], submission.permalink
-            )
+        log.info(
+            "Submitted to /r/%s at https://reddit.com%s",
+            sr_row["name"],
+            submission.permalink,
         )
 
         if row["nsfw"]:
@@ -239,10 +233,8 @@ def post_submissions(con, work_ids=None, submissions=None, do_all=False, last=Fa
     ).fetchall()
 
     if len(rows) == 0:
-        errecho("No works require posting")
+        log.info("No works require posting")
         return
-
-    errecho("Posting...")
 
     for row in rows:
         do_post(con, row)
@@ -272,10 +264,8 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
     ).fetchall()
 
     if not rows:
-        errecho("No works require uploading")
+        log.info("No works require uploading")
         return
-
-    errecho("Uploading to Imgur...")
 
     for row in rows:
         title = "{title} ({artist})".format(**row)
@@ -295,7 +285,7 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
 
             link = "https://imgur.com/a/{}".format(album_id)
 
-            errecho("Created album at {}".format(link))
+            log.info("Created album at %s", link)
 
             con.db.execute(
                 works.update()
@@ -310,7 +300,7 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
 
                 data = resp.json()["data"]
 
-                errecho("Uploaded image #{} to {}".format(index, data["link"]))
+                log.info("Uploaded image %s to %s", index, data["link"])
 
         else:
             resp = con.imgur.upload_url(row["source_image_url"], title, description)
@@ -325,11 +315,10 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
                 .where(works.c.id == row["id"])
             )
 
-            errecho("\tUploaded at {}".format(data["link"]))
+            log.info("Uploaded at %s", data["link"])
 
 
 def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
-    errecho("Saving to database...")
     works = con.meta.tables["works"]
 
     is_album = isinstance(source_image_url, list)
@@ -351,7 +340,7 @@ def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
 
     work_id = con.db.execute(query).first()["id"]
 
-    errecho("\tSaved with id {}".format(work_id))
+    log.info("Work saved with id %s", work_id)
 
     return work_id
 
@@ -372,7 +361,7 @@ def edit_subreddits(
         status = subreddit_status(name, con.reddit)
 
         if not status:
-            errecho("\t/r/{} is {}".format(name, status.name.lower()))
+            log.warning("/r/%s is %s", name, status.name.lower())
         else:
             con.db.execute(
                 sql.text(
@@ -399,7 +388,6 @@ def edit_subreddits(
 
 
 def add_submissions(con, work_id, specifiers):
-    errecho("Adding submissions...")
     submissions = con.meta.tables["submissions"]
     subreddits = con.meta.tables["subreddits"]
 
@@ -423,24 +411,24 @@ def add_submissions(con, work_id, specifiers):
 
         except exc.IntegrityError as e:
             msg = {
-                "check_require_flair": "/r/{} requires a flair",
-                "check_require_series": "/r/{} requires a series",
-                "check_require_tag": "/r/{} requires a tag",
-                "already_exists": "/r/{} already has this work",
+                "check_require_flair": "/r/%s requires a flair",
+                "check_require_series": "/r/%s requires a series",
+                "check_require_tag": "/r/%s requires a tag",
+                "already_exists": "/r/%s already has this work",
             }.get(e.orig.diag.constraint_name, None)
 
             if (
                 e.orig.pgcode == errorcodes.NOT_NULL_VIOLATION
                 and e.orig.diag.column_name == "subreddit_id"
             ):
-                msg = "/r/{} is unknown"
+                msg = "/r/%s is unknown"
 
             if not msg:
                 raise e
 
-            errecho("\t" + msg.format(triple[0]))
+            log.warning(msg, triple[0])
         else:
-            errecho("\tAdded to /r/{}".format(triple[0]))
+            log.info("Added to /r/%s", triple[0])
 
 
 class SubStatus(enum.Enum):

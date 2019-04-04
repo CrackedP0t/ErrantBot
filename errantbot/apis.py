@@ -9,8 +9,6 @@ import click
 import praw
 from requests_oauthlib import OAuth2Session
 
-from . import helper as h
-
 
 def receive_connection():
     """Wait for and then return a connected socket..
@@ -85,8 +83,6 @@ class Reddit:
                 json.dump({"refresh_token": refresh_token}, token_file)
 
             send_message(client, "ErrantBot's authenticated!")
-
-        h.errecho("\tAuthentication complete")
 
         return self.reddit
 

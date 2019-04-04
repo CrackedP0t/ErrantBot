@@ -1,3 +1,4 @@
+import logging
 import warnings
 
 import click
@@ -5,6 +6,11 @@ import validators as val
 from praw.models import Submission
 from sqlalchemy import sql
 from tabulate import tabulate
+
+eb_log = logging.getLogger("errantbot")
+
+log = logging.getLogger("errantbot.cli")
+
 
 from . import extract
 from . import helper as h
@@ -183,12 +189,10 @@ def list_flairs(con, subreddit_name):
     sub = h.subreddit_or_status(con.reddit, subreddit_name)
 
     if not sub:
-        click.ClickException("/r/{} is {}".format(subreddit_name, sub.name.lower()))
+        log.warning("/r/%s is %s", subreddit_name, sub.name.lower())
 
     if not sub.can_assign_link_flair:
-        click.echo(
-            "/r/{} does not allow users to assign link flair".format(subreddit_name)
-        )
+        log.warning("/r/%s does not allow users to assign link flair", subreddit_name)
 
     else:
         columns = map(
@@ -281,9 +285,7 @@ def delete_post(con, id_type, delete, post_id):
         row = con.db.execute(query).first()
 
         if row is None:
-            raise click.ClickException(
-                "Submission #{} does not exist".format(submission_id)
-            )
+            log.error("Submission %s does not exist", submission_id)
 
         reddit_id = row["reddit_id"]
     else:
