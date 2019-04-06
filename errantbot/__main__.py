@@ -7,10 +7,25 @@ from praw.models import Submission
 from sqlalchemy import sql
 from tabulate import tabulate
 
+logging.basicConfig()
+
+
+class EBFormatter(logging.Formatter):
+    def format(self, record):
+        if record.levelname == "INFO":
+            return record.getMessage()
+        else:
+            return record.levelname.title() + ": " + record.getMessage()
+
+
 eb_log = logging.getLogger("errantbot")
+eb_log.propagate = False
+eb_log.setLevel(logging.INFO)
+eb_handler = logging.StreamHandler()
+eb_handler.setFormatter(EBFormatter())
+eb_log.addHandler(eb_handler)
 
 log = logging.getLogger("errantbot.cli")
-
 
 from . import extract
 from . import helper as h
@@ -59,12 +74,13 @@ def add(con, source_url, submissions, title, artist, series, nsfw, index, album,
         work.image_url,
     )
 
-    h.add_submissions(con, work_id, submissions)
+    if work_id:
+        h.add_submissions(con, work_id, submissions)
 
-    h.upload_to_imgur(con, work_id)
+        h.upload_to_imgur(con, work_id)
 
-    if post:
-        h.post_submissions(con, work_id)
+        if post:
+            h.post_submissions(con, work_id)
 
 
 @cli.command()
@@ -185,7 +201,7 @@ def retry_upload(con, work_ids, last):
 @cli.command()
 @click.pass_obj
 @click.argument("subreddit-name", type=types.subreddit, required=True)
-def list_flairs(con, subreddit_name):
+def flairs(con, subreddit_name):
     sub = h.subreddit_or_status(con.reddit, subreddit_name)
 
     if not sub:

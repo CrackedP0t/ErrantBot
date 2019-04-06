@@ -338,11 +338,19 @@ def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
 
     query = works.insert(values=values).returning(works.c.id)
 
-    work_id = con.db.execute(query).first()["id"]
-
-    log.info("Work saved with id %s", work_id)
-
-    return work_id
+    try:
+        work_id = con.db.execute(query).first()["id"]
+    except exc.IntegrityError as e:
+        if e.orig.diag.constraint_name == "works_source_image_url_key":
+            old_id = con.db.execute(
+                select([works.c.id]).where(works.c.source_image_url == source_image_url)
+            ).first()["id"]
+            log.error("This image URL has already been added with ID %s", old_id)
+        else:
+            raise e
+    else:
+        log.info("Work saved with ID %s", work_id)
+        return work_id
 
 
 def edit_subreddits(
