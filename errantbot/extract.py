@@ -4,10 +4,8 @@ from urllib.parse import parse_qs, quote, urlparse
 import click
 import regex
 import requests
-from bs4 import BeautifulSoup
-
 import tldextract
-from pixivpy3 import AppPixivAPI
+from bs4 import BeautifulSoup
 
 from . import helper as h
 
@@ -50,6 +48,8 @@ def artstation(page_url, options):
 
 
 def pixiv(page_url, options):
+    from pixivpy3 import AppPixivAPI
+
     parsed = urlparse(page_url)
     query = parse_qs(parsed.query)
 
@@ -71,7 +71,7 @@ def pixiv(page_url, options):
 
     return Work(
         data["title"],
-        data["user"]["name"],
+        data["user"]["account" if options["username"] else "name"],
         data["series"],
         data["x_restrict"] > 0,
         image_url,
@@ -167,15 +167,12 @@ def furaffinity(page_url, options):
     return Work(title, artist, None, nsfw, image_url, page_url)
 
 
-def auto(page_url, options=None):
-    default_options = {"index": 0, "album": False}
-
-    if options is None:
-        options = {}
+def auto(page_url, **kwargs):
+    default_options = {"index": 0, "album": False, "username": False}
 
     for k, v in default_options.items():
-        if k not in options:
-            options[k] = v
+        if k not in kwargs:
+            kwargs[k] = v
 
     domains = {
         "artstation": artstation,
@@ -190,4 +187,4 @@ def auto(page_url, options=None):
     domain = no_fetch_extract(page_url).domain
 
     if domain in domains:
-        return domains[domain](page_url, options)
+        return domains[domain](page_url, kwargs)

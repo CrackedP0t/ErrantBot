@@ -1,6 +1,7 @@
 import enum
-from datetime import datetime, timedelta
 import logging
+from collections import namedtuple
+from datetime import datetime, timedelta
 
 import praw
 import tomlkit
@@ -22,11 +23,13 @@ def has_keys(dictionary, keys):
 
 
 class Submissions:
+    NFT = namedtuple("NFT", ["name", "flair", "tag"])
+
     def __len__(self):
         return self.length
 
     def __init__(self, tuples):
-        self.n_f_t = tuple(tuples)
+        self.n_f_t = tuple(self.NFT(*t) for t in tuples)
 
         self.names = tuple(map(lambda s: s[0], self.n_f_t))
         self.flairs = tuple(map(lambda s: s[1], self.n_f_t))
@@ -356,15 +359,20 @@ def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
 def edit_subreddits(
     con,
     names,
-    tag_series,
-    flair_id,
-    rehost,
-    require_flair,
-    require_tag,
-    require_series,
-    space_out,
-    disabled,
+    tag_series=False,
+    flair_id=None,
+    rehost=True,
+    require_flair=False,
+    require_tag=False,
+    require_series=False,
+    space_out=True,
+    disabled=False,
+    upsert=True,
 ):
+    if len(names) == 0:
+        log.info("No subreddits were given")
+        return
+
     for name in names:
         status = subreddit_status(name, con.reddit)
 
@@ -376,12 +384,16 @@ def edit_subreddits(
                     """INSERT INTO subreddits (name, tag_series, flair_id,
                 rehost, require_flair, require_tag, space_out, disabled)
                 VALUES (:name, :tag_series, :flair_id, :rehost, :require_flair,
-                :require_tag, :space_out, :disabled)
-                ON CONFLICT (name) DO UPDATE SET
+                :require_tag, :space_out, :disabled) ON CONFLICT (name) DO """
+                    + (
+                        """UPDATE SET
                 tag_series = :tag_series, flair_id = :flair_id, rehost = :rehost,
                 require_flair = :require_flair, require_tag = :require_tag,
                 require_series = :require_series, space_out = :space_out,
                 disabled = :disabled"""
+                        if upsert
+                        else "NOTHING"
+                    )
                 ),
                 name=name,
                 flair_id=flair_id,
@@ -396,6 +408,10 @@ def edit_subreddits(
 
 
 def add_submissions(con, work_id, specifiers):
+    if len(specifiers) == 0:
+        log.info("No submissions were given")
+        return
+
     submissions = con.meta.tables["submissions"]
     subreddits = con.meta.tables["subreddits"]
 

@@ -7,7 +7,9 @@ from praw.models import Submission
 from sqlalchemy import sql
 from tabulate import tabulate
 
-logging.basicConfig()
+from . import extract
+from . import helper as h
+from . import paramtypes as types
 
 
 class EBFormatter(logging.Formatter):
@@ -25,11 +27,9 @@ eb_handler = logging.StreamHandler()
 eb_handler.setFormatter(EBFormatter())
 eb_log.addHandler(eb_handler)
 
-log = logging.getLogger("errantbot.cli")
+logging.basicConfig()
 
-from . import extract
-from . import helper as h
-from . import paramtypes as types
+log = logging.getLogger("errantbot.cli")
 
 
 @click.group()
@@ -49,9 +49,24 @@ def cli(ctx):
 @click.option("--nsfw/--sfw", "-n/-N", default=None)
 @click.option("--index", "-i", default=0, type=int)
 @click.option("--album", "-l", is_flag=True)
-@click.option("--post/--no-post", "-p/-P", default=True)
-def add(con, source_url, submissions, title, artist, series, nsfw, index, album, post):
-    work = extract.auto(source_url, {"index": index, "album": album})
+@click.option("--no-post", "-P", is_flag=True)
+@click.option("--add-sr", "-r", is_flag=True)
+@click.option("--username", "-u", is_flag=True)
+def add(
+    con,
+    source_url,
+    submissions,
+    title,
+    artist,
+    series,
+    nsfw,
+    index,
+    album,
+    no_post,
+    add_sr,
+    username,
+):
+    work = extract.auto(source_url, index=index, album=album, username=username)
 
     work = extract.Work(
         title or work.title,
@@ -63,6 +78,11 @@ def add(con, source_url, submissions, title, artist, series, nsfw, index, album,
     )
 
     submissions = h.Submissions(submissions)
+
+    if add_sr:
+        h.edit_subreddits(
+            con, tuple(n_f_t.name for n_f_t in submissions.n_f_t), upsert=False
+        )
 
     work_id = h.save_work(
         con,
@@ -79,7 +99,7 @@ def add(con, source_url, submissions, title, artist, series, nsfw, index, album,
 
         h.upload_to_imgur(con, work_id)
 
-        if post:
+        if not no_post:
             h.post_submissions(con, work_id)
 
 
@@ -149,25 +169,41 @@ def sr(
 @click.pass_obj
 @click.argument("work-id", type=int, required=True)
 @click.argument("submissions", nargs=-1, type=types.submission)
-def crosspost(con, work_id, submissions):
+@click.option("--add-sr", "-r", is_flag=True)
+@click.option("--no-post", "-P", is_flag=True)
+def crosspost(con, work_id, submissions, no_post, add_sr):
     submissions = h.Submissions(submissions)
+
+    if add_sr:
+        h.edit_subreddits(
+            con, tuple(n_f_t.name for n_f_t in submissions.n_f_t), upsert=False
+        )
 
     h.add_submissions(con, work_id, submissions)
 
-    h.post_submissions(con, work_id, submissions)
+    if not no_post:
+        h.post_submissions(con, work_id, submissions)
 
 
 @cli.command()
 @click.pass_obj
 @click.argument("submissions", nargs=-1, type=types.submission)
-def crosspost_last(con, submissions):
+@click.option("--add-sr", "-r", is_flag=True)
+@click.option("--no-post", "-P", is_flag=True)
+def crosspost_last(con, submissions, no_post, add_sr):
     submissions = h.Submissions(submissions)
+
+    if add_sr:
+        h.edit_subreddits(
+            con, tuple(n_f_t.name for n_f_t in submissions.n_f_t), upsert=False
+        )
 
     work_id = h.get_last(con, "works")
 
     h.add_submissions(con, work_id, submissions)
 
-    h.post_submissions(con, work_id, submissions)
+    if not no_post:
+        h.post_submissions(con, work_id, submissions)
 
 
 @cli.command()
@@ -221,8 +257,9 @@ def flairs(con, subreddit_name):
 @click.argument("url", required=True, type=types.url)
 @click.option("--index", "-i", default=0, type=int)
 @click.option("--album", "-l", is_flag=True)
-def _extract(url, index, album):
-    work = extract.auto(url, {"index": index, "album": album})
+@click.option("--username", "-u", is_flag=True)
+def _extract(url, index, album, username):
+    work = extract.auto(url, index=index, album=album, username=username)
 
     for field in work._fields:
         attr = getattr(work, field)
