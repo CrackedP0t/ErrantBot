@@ -131,37 +131,37 @@ def add_custom(
 @cli.command()
 @click.pass_obj
 @click.argument("names", type=types.subreddit, nargs=-1)
-@click.option("--tag-series/--no-tag-series", "-s/-S", default=False)
+@click.option("--disabled", "-d", is_flag=True)
 @click.option("--flair-id", "-f", type=types.flair_id)
-@click.option("--rehost/--no-rehost", "-r/-R", default=True)
-@click.option("--require-flair/--no-require-flair", "-q/-Q", default=False)
-@click.option("--require-tag/--no-require-tag", "-t/-T", default=False)
-@click.option("--require-series/--no-require-series", "-e/-E", default=False)
-@click.option("--space-out/--no-space-out", "-o/-O", default=True)
-@click.option("--disabled/--enabled", "-d/-D", default=False)
+@click.option("--no-space-out", "-O", is_flag=True)
+@click.option("--require-flair/--no-require-flair", "-q/-Q", is_flag=True)
+@click.option("--require-series", "-e", is_flag=True)
+@click.option("--require-tag", "-t", is_flag=True)
+@click.option("--sfw-only", "-N", is_flag=True)
+@click.option("--tag-series", "-s", is_flag=True)
 def sr(
     con,
     names,
-    tag_series,
-    flair_id,
-    rehost,
-    require_flair,
-    require_tag,
-    require_series,
-    space_out,
     disabled,
+    flair_id,
+    require_flair,
+    require_series,
+    require_tag,
+    sfw_only,
+    no_space_out,
+    tag_series,
 ):
     h.edit_subreddits(
         con,
         names,
-        tag_series,
-        flair_id,
-        rehost,
-        require_flair,
-        require_tag,
-        require_series,
-        space_out,
         disabled,
+        flair_id,
+        require_flair,
+        require_series,
+        require_tag,
+        sfw_only,
+        not no_space_out,
+        tag_series,
     )
 
 
@@ -272,7 +272,7 @@ def _extract(url, index, album, username):
 @click.pass_obj
 @click.argument("names", nargs=-1, type=types.subreddit)
 @click.option("--ready/--not-ready", "-r/-R", default=None)
-def list_subs(con, names, ready):
+def list_srs(con, names, ready):
     sr_table = con.meta.tables["subreddits"]
     sub_table = con.meta.tables["submissions"]
 
@@ -322,9 +322,9 @@ def list_works(con):
 @click.pass_obj
 @click.option("--reddit-id", "-r", "id_type", flag_value="reddit", default=True)
 @click.option("--submission-id", "-s", "id_type", flag_value="submission")
-@click.option("--delete/--no-delete", "-d/-D", default=True)
+@click.option("--from-reddit", "-r", is_flag=True)
 @click.argument("post-id")
-def delete_post(con, id_type, delete, post_id):
+def delete_post(con, id_type, from_reddit, post_id):
     submissions = con.meta.tables["submissions"]
 
     use_reddit = id_type == "submission"
@@ -339,6 +339,7 @@ def delete_post(con, id_type, delete, post_id):
 
         if row is None:
             log.error("Submission %s does not exist", submission_id)
+            return
 
         reddit_id = row["reddit_id"]
     else:
@@ -347,7 +348,7 @@ def delete_post(con, id_type, delete, post_id):
         if val.url(reddit_id):
             reddit_id = Submission.id_from_url(reddit_id)
 
-    if delete and reddit_id:
+    if from_reddit and reddit_id:
         sub = con.reddit.submission(reddit_id)
 
         sub.delete()

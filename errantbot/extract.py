@@ -7,6 +7,7 @@ import requests
 import tldextract
 from bs4 import BeautifulSoup
 
+from . import exceptions as exc
 from . import helper as h
 
 Work = namedtuple(
@@ -188,3 +189,5 @@ def auto(page_url, **kwargs):
 
     if domain in domains:
         return domains[domain](page_url, kwargs)
+
+    raise exc.UnsupportedSite(page_url)

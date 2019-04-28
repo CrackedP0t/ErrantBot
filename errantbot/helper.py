@@ -116,7 +116,7 @@ def do_post(con, row):
     sr_row = con.db.execute(
         sql.text(
             """SELECT last_submission_on, space_out, name, tag_series,
-        rehost, flair_id, disabled FROM subreddits WHERE id = :id"""
+        flair_id, disabled FROM subreddits WHERE id = :id"""
         ),
         id=row["subreddit_id"],
     ).first()
@@ -151,13 +151,7 @@ def do_post(con, row):
         **row
     )
 
-    if sr_row["rehost"]:
-        url = row["imgur_url"]
-    else:
-        if row["is_album"]:
-            url = row["source_image_urls"][0]
-        else:
-            url = row["source_image_url"]
+    url = row["imgur_url"]
 
     try:
         submission = sub.submit(
@@ -359,18 +353,18 @@ def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
 def edit_subreddits(
     con,
     names,
-    tag_series=False,
-    flair_id=None,
-    rehost=True,
-    require_flair=False,
-    require_tag=False,
-    require_series=False,
-    space_out=True,
     disabled=False,
+    flair_id=None,
+    require_flair=False,
+    require_series=False,
+    require_tag=False,
+    sfw_only=False,
+    space_out=True,
+    tag_series=False,
     upsert=True,
 ):
     if len(names) == 0:
-        log.info("No subreddits were given")
+        log.info("No subreddits were supplied")
         return
 
     for name in names:
@@ -382,15 +376,15 @@ def edit_subreddits(
             con.db.execute(
                 sql.text(
                     """INSERT INTO subreddits (name, tag_series, flair_id,
-                rehost, require_flair, require_tag, space_out, disabled)
-                VALUES (:name, :tag_series, :flair_id, :rehost, :require_flair,
-                :require_tag, :space_out, :disabled) ON CONFLICT (name) DO """
+                require_flair, require_tag, space_out, disabled, sfw_only)
+                VALUES (:name, :tag_series, :flair_id, :require_flair,
+                :require_tag, :space_out, :disabled, :sfw_only) ON CONFLICT (name) DO """
                     + (
                         """UPDATE SET
-                tag_series = :tag_series, flair_id = :flair_id, rehost = :rehost,
+                tag_series = :tag_series, flair_id = :flair_id,
                 require_flair = :require_flair, require_tag = :require_tag,
                 require_series = :require_series, space_out = :space_out,
-                disabled = :disabled"""
+                disabled = :disabled, sfw_only=:sfw_only"""
                         if upsert
                         else "NOTHING"
                     )
@@ -398,12 +392,12 @@ def edit_subreddits(
                 name=name,
                 flair_id=flair_id,
                 tag_series=tag_series,
-                rehost=rehost,
                 require_flair=require_flair,
                 require_tag=require_tag,
                 require_series=require_series,
                 space_out=space_out,
                 disabled=disabled,
+                sfw_only=sfw_only,
             )
 
 
