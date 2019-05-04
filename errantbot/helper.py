@@ -257,10 +257,10 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
 
     rows = con.db.execute(
         sql.text(
-            """SELECT title, artist, source_image_url, source_image_urls,
-        source_url, imgur_url, id, is_album
-        FROM works WHERE imgur_id IS NULL"""
-            + ("" if do_all else " AND id = ANY(:work_ids)")
+            """SELECT title, artists.name as artist, source_image_url, source_image_urls,
+        source_url, imgur_url, works.id, is_album
+        FROM works INNER JOIN artists ON imgur_id IS NULL AND artist_id = artists.id"""
+            + ("" if do_all else " AND works.id = ANY(:work_ids)")
         ),
         work_ids=None if do_all else work_ids,
     ).fetchall()
