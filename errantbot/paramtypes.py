@@ -1,7 +1,6 @@
 import regex
-from click import ParamType
-
 import validators as val
+from click import ParamType
 
 
 class URL(ParamType):

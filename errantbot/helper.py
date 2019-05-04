@@ -317,10 +317,7 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
             log.info("Uploaded at %s", data["link"])
 
 
-def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
-    works = con.meta.tables["works"]
-    a_t = con.meta.tables["artists"]
-
+def do_artists(con, artists):
     a_upsert = sql.text(
         """INSERT INTO artists (name, alias_of) VALUES (:name, :alias_of)
         ON CONFLICT (name) DO UPDATE SET alias_of=NULLIF(:alias_of, artists.id) RETURNING id"""
@@ -346,6 +343,14 @@ def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
     for a_name in artists[1:]:
         if a_name != artist:
             con.db.execute(a_upsert, name=a_name, alias_of=pa_id)
+
+    return artist
+
+
+def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
+    artist = do_artists(artists)
+
+    works = con.meta.tables["works"]
 
     is_album = isinstance(source_image_url, list)
 

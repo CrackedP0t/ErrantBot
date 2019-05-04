@@ -317,7 +317,7 @@ def list_works(con):
 @click.option("--reddit-id", "-r", "id_type", flag_value="reddit", default=True)
 @click.option("--submission-id", "-s", "id_type", flag_value="submission")
 @click.option("--from-reddit", "-r", is_flag=True)
-@click.argument("post-id")
+@click.argument("post-id", type=int)
 def delete_post(con, id_type, from_reddit, post_id):
     submissions = con.meta.tables["submissions"]
 
@@ -360,6 +360,16 @@ def delete_post(con, id_type, from_reddit, post_id):
         query = query.where(submissions.c.id == submission_id)
 
     con.db.execute(query)
+
+
+@cli.command()
+@click.pass_obj()
+@click.argument("artists", nargs=-1)
+def artists(con, artists):
+    if val.url(artists[0]):
+        artists = artists[1:] + extract.auto(artists[0])
+
+    h.do_artists(con, artists)
 
 
 if __name__ == "__main__":
