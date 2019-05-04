@@ -323,7 +323,7 @@ def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
 
     a_upsert = sql.text(
         """INSERT INTO artists (name, alias_of) VALUES (:name, :alias_of)
-        ON CONFLICT (name) DO UPDATE SET alias_of=NULLIF(:alias_of, id) RETURNING id"""
+        ON CONFLICT (name) DO UPDATE SET alias_of=NULLIF(:alias_of, artists.id) RETURNING id"""
     )
     by_id = sql.text("""SELECT id, name FROM artists WHERE id = :id""")
     by_name = sql.text("""SELECT id, alias_of FROM artists WHERE name = :name""")
