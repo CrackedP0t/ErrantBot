@@ -197,6 +197,8 @@ def post_submissions(con, work_ids=None, submissions=None, do_all=False, last=Fa
         work_ids = []
 
     if not isinstance(work_ids, list):
+        if isinstance(work_ids, str):
+            work_ids = [work_ids]
         if hasattr(work_ids, "__iter__"):
             work_ids = list(work_ids)
         else:
@@ -315,8 +317,35 @@ def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
             log.info("Uploaded at %s", data["link"])
 
 
-def save_work(con, title, series, artist, source_url, nsfw, source_image_url):
+def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
     works = con.meta.tables["works"]
+    a_t = con.meta.tables["artists"]
+
+    a_upsert = sql.text(
+        """INSERT INTO artists (name, alias_of) VALUES (:name, :alias_of)
+        ON CONFLICT (name) DO UPDATE SET alias_of=NULLIF(:alias_of, id) RETURNING id"""
+    )
+    by_id = sql.text("""SELECT id, name FROM artists WHERE id = :id""")
+    by_name = sql.text("""SELECT id, alias_of FROM artists WHERE name = :name""")
+
+    row = con.db.execute(by_name, name=artists[0]).first()
+
+    preferred_id = None
+
+    if row and row["alias_of"]:
+        if row["alias_of"]:
+            pa_id = row["alias_of"]
+            artist = con.db.execute(by_id, id=pa_id).first()["name"]
+        else:
+            pa_id = row["id"]
+            artist = artists[0]
+    else:
+        pa_id = con.db.execute(a_upsert, name=artists[0], alias_of=None).first()["id"]
+        artist = artists[0]
+
+    for a_name in artists[1:]:
+        if a_name != artist:
+            con.db.execute(a_upsert, name=a_name, alias_of=pa_id)
 
     is_album = isinstance(source_image_url, list)
 
@@ -355,6 +384,7 @@ def edit_subreddits(
     names,
     disabled=False,
     flair_id=None,
+    force=False,
     require_flair=False,
     require_series=False,
     require_tag=False,
@@ -371,34 +401,42 @@ def edit_subreddits(
         status = subreddit_status(name, con.reddit)
 
         if not status:
-            log.warning("/r/%s is %s", name, status.name.lower())
-        else:
-            con.db.execute(
-                sql.text(
-                    """INSERT INTO subreddits (name, tag_series, flair_id,
-                require_flair, require_tag, space_out, disabled, sfw_only)
-                VALUES (:name, :tag_series, :flair_id, :require_flair,
-                :require_tag, :space_out, :disabled, :sfw_only) ON CONFLICT (name) DO """
-                    + (
-                        """UPDATE SET
-                tag_series = :tag_series, flair_id = :flair_id,
-                require_flair = :require_flair, require_tag = :require_tag,
-                require_series = :require_series, space_out = :space_out,
-                disabled = :disabled, sfw_only=:sfw_only"""
-                        if upsert
-                        else "NOTHING"
-                    )
-                ),
-                name=name,
-                flair_id=flair_id,
-                tag_series=tag_series,
-                require_flair=require_flair,
-                require_tag=require_tag,
-                require_series=require_series,
-                space_out=space_out,
-                disabled=disabled,
-                sfw_only=sfw_only,
+            log.warning(
+                "/r/%s is %s%s",
+                name,
+                status.name.lower(),
+                "; saving anyway" if force else "",
             )
+
+            if not force:
+                return
+
+        con.db.execute(
+            sql.text(
+                """INSERT INTO subreddits (name, tag_series, flair_id,
+          require_flair, require_tag, space_out, disabled, sfw_only)
+          VALUES (:name, :tag_series, :flair_id, :require_flair,
+          :require_tag, :space_out, :disabled, :sfw_only) ON CONFLICT (name) DO """
+                + (
+                    """UPDATE SET
+          tag_series = :tag_series, flair_id = :flair_id,
+          require_flair = :require_flair, require_tag = :require_tag,
+          require_series = :require_series, space_out = :space_out,
+          disabled = :disabled, sfw_only=:sfw_only"""
+                    if upsert
+                    else "NOTHING"
+                )
+            ),
+            name=name,
+            flair_id=flair_id,
+            tag_series=tag_series,
+            require_flair=require_flair,
+            require_tag=require_tag,
+            require_series=require_series,
+            space_out=space_out,
+            disabled=disabled,
+            sfw_only=sfw_only,
+        )
 
 
 def add_submissions(con, work_id, specifiers):

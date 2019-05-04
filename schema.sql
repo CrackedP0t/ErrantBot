@@ -72,6 +72,38 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
+-- Name: artists; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.artists (
+    id integer NOT NULL,
+    name character varying NOT NULL,
+    alias_of integer,
+    CONSTRAINT artists_not_reflexive CHECK ((id <> alias_of))
+);
+
+
+--
+-- Name: artists_id_seq1; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.artists_id_seq1
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: artists_id_seq1; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.artists_id_seq1 OWNED BY public.artists.id;
+
+
+--
 -- Name: submissions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -118,13 +150,13 @@ CREATE TABLE public.subreddits (
     name character varying NOT NULL,
     tag_series boolean DEFAULT false NOT NULL,
     flair_id character varying,
-    rehost boolean DEFAULT true,
     last_submission_on timestamp without time zone,
     require_flair boolean DEFAULT false NOT NULL,
     require_tag boolean DEFAULT false NOT NULL,
     space_out boolean DEFAULT true NOT NULL,
     require_series boolean DEFAULT false NOT NULL,
-    disabled boolean DEFAULT false NOT NULL
+    disabled boolean DEFAULT false NOT NULL,
+    sfw_only boolean DEFAULT false NOT NULL
 );
 
 
@@ -189,6 +221,13 @@ ALTER SEQUENCE public.works_id_seq OWNED BY public.works.id;
 
 
 --
+-- Name: artists id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.artists ALTER COLUMN id SET DEFAULT nextval('public.artists_id_seq1'::regclass);
+
+
+--
 -- Name: submissions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -215,6 +254,22 @@ ALTER TABLE ONLY public.works ALTER COLUMN id SET DEFAULT nextval('public.works_
 
 ALTER TABLE ONLY public.submissions
     ADD CONSTRAINT already_exists UNIQUE (work_id, subreddit_id);
+
+
+--
+-- Name: artists artists_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.artists
+    ADD CONSTRAINT artists_name_key UNIQUE (name);
+
+
+--
+-- Name: artists artists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.artists
+    ADD CONSTRAINT artists_pkey PRIMARY KEY (id);
 
 
 --
@@ -262,6 +317,14 @@ ALTER TABLE ONLY public.works
 --
 
 CREATE TRIGGER update_last_submission_on AFTER INSERT OR DELETE OR UPDATE OF submitted_on ON public.submissions FOR EACH ROW EXECUTE PROCEDURE public.update_last_submission_on();
+
+
+--
+-- Name: artists artists_alias_of_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.artists
+    ADD CONSTRAINT artists_alias_of_fkey FOREIGN KEY (alias_of) REFERENCES public.artists(id);
 
 
 --

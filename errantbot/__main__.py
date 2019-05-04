@@ -66,17 +66,6 @@ def add(
     add_sr,
     username,
 ):
-    work = extract.auto(source_url, index=index, album=album, username=username)
-
-    work = extract.Work(
-        title or work.title,
-        artist or work.artist,
-        series or work.series,
-        nsfw or work.nsfw,
-        work.image_url,
-        work.source_url,
-    )
-
     submissions = h.Submissions(submissions)
 
     if add_sr:
@@ -84,13 +73,15 @@ def add(
             con, tuple(n_f_t.name for n_f_t in submissions.n_f_t), upsert=False
         )
 
+    work = extract.auto(source_url, index=index, album=album, username=username)
+
     work_id = h.save_work(
         con,
-        work.title,
-        work.series,
-        work.artist,
+        title or work.title,
+        series or work.series,
+        (artist,) + work.artists if artist else work.artists,
         work.source_url,
-        work.nsfw,
+        nsfw or work.nsfw,
         work.image_url,
     )
 
@@ -132,7 +123,8 @@ def add_custom(
 @click.pass_obj
 @click.argument("names", type=types.subreddit, nargs=-1)
 @click.option("--disabled", "-d", is_flag=True)
-@click.option("--flair-id", "-f", type=types.flair_id)
+@click.option("--flair-id", "-l", type=types.flair_id)
+@click.option("--force", "-f", is_flag=True)
 @click.option("--no-space-out", "-O", is_flag=True)
 @click.option("--require-flair/--no-require-flair", "-q/-Q", is_flag=True)
 @click.option("--require-series", "-e", is_flag=True)
@@ -144,6 +136,7 @@ def sr(
     names,
     disabled,
     flair_id,
+    force,
     require_flair,
     require_series,
     require_tag,
@@ -156,6 +149,7 @@ def sr(
         names,
         disabled,
         flair_id,
+        force,
         require_flair,
         require_series,
         require_tag,
@@ -210,13 +204,13 @@ def crosspost_last(con, submissions, no_post, add_sr):
 @click.pass_obj
 @click.argument("work-ids", type=int, nargs=-1)
 @click.option("--last", "-l", is_flag=True)
-def retry_post(con, work_ids, last):
+def retry(con, work_ids, last):
     h.post_submissions(con, work_ids, last=last)
 
 
 @cli.command()
 @click.pass_obj
-def retry_all_posts(con):
+def retry_all(con):
     h.post_submissions(con, do_all=True)
 
 

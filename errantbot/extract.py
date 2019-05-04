@@ -11,7 +11,7 @@ from . import exceptions as exc
 from . import helper as h
 
 Work = namedtuple(
-    "Work", ["title", "artist", "series", "nsfw", "image_url", "source_url"]
+    "Work", ["title", "artists", "series", "nsfw", "image_url", "source_url"]
 )
 
 
@@ -45,7 +45,7 @@ def artstation(page_url, options):
 
     clean_artist = antifun.sub("", artist).strip()
 
-    return Work(title, clean_artist, None, nsfw, image_url, page_url)
+    return Work(title, (clean_artist,), None, nsfw, image_url, page_url)
 
 
 def pixiv(page_url, options):
@@ -72,8 +72,11 @@ def pixiv(page_url, options):
 
     return Work(
         data["title"],
-        data["user"]["account" if options["username"] else "name"],
-        data["series"],
+        (
+            data["user"]["account" if options["username"] else "name"],
+            data["user"]["name" if options["username"] else "account"],
+        ),
+        None,
         data["x_restrict"] > 0,
         image_url,
         page_url,
@@ -105,7 +108,7 @@ def hentai_foundry(page_url, options):
 
     nsfw = bool(ratings.find(title="Nudity") or ratings.find(title="Sexual content"))
 
-    return Work(title, artist, series, nsfw, image_url, page_url)
+    return Work(title, (artist,), series, nsfw, image_url, page_url)
 
 
 def deviantart(page_url, options):
@@ -122,7 +125,7 @@ def deviantart(page_url, options):
 
     return Work(
         data["title"],
-        data["author_name"],
+        (data["author_name"],),
         None,
         data["safety"] != "nonadult",
         url,
@@ -165,7 +168,7 @@ def furaffinity(page_url, options):
 
     image_url = "https:" + soup.find(name="a", text="Download")["href"]
 
-    return Work(title, artist, None, nsfw, image_url, page_url)
+    return Work(title, (artist,), None, nsfw, image_url, page_url)
 
 
 def auto(page_url, **kwargs):
