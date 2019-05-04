@@ -16,6 +16,17 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: artist_not_alias(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.artist_not_alias(artist_id integer) RETURNS boolean
+    LANGUAGE sql
+    AS $$
+    SELECT alias_of is null from artists where id = artist_id;
+$$;
+
+
+--
 -- Name: check_require_flair(character varying, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34,6 +45,17 @@ CREATE FUNCTION public.check_require_series(work_id integer, subreddit_id intege
     LANGUAGE sql
     AS $$
     SELECT EXISTS(SELECT FROM subreddits WHERE id = subreddit_id AND NOT require_series) OR EXISTS(SELECT FROM works WHERE id = work_id AND series IS NOT NULL);
+$$;
+
+
+--
+-- Name: check_require_tag(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_require_tag(artist_id integer) RETURNS boolean
+    LANGUAGE sql
+    AS $$
+    SELECT alias_of is not null from artists where id = artist_id;
 $$;
 
 
@@ -186,7 +208,6 @@ ALTER SEQUENCE public.subreddits_id_seq OWNED BY public.subreddits.id;
 
 CREATE TABLE public.works (
     id integer NOT NULL,
-    artist character varying NOT NULL,
     title character varying NOT NULL,
     series character varying,
     nsfw boolean DEFAULT false NOT NULL,
@@ -196,6 +217,8 @@ CREATE TABLE public.works (
     imgur_url character varying,
     source_image_urls character varying[],
     is_album boolean DEFAULT false NOT NULL,
+    artist_id integer NOT NULL,
+    CONSTRAINT check_artist_not_alias CHECK (public.artist_not_alias(artist_id)),
     CONSTRAINT multiple_or_one CHECK ((((source_image_urls IS NOT NULL) AND (source_image_url IS NULL)) OR ((source_image_urls IS NULL) AND (source_image_url IS NOT NULL))))
 );
 

@@ -109,7 +109,7 @@ def add_custom(
     submissions = h.Submissions(submissions)
 
     work_id = h.save_work(
-        con, title, series, artist, source_url, nsfw, source_image_url
+        con, title, series, (artist,), source_url, nsfw, source_image_url
     )
 
     h.add_submissions(con, work_id, submissions)
@@ -305,7 +305,10 @@ def list_srs(con, names, ready):
 @cli.command()
 @click.pass_obj
 def list_works(con):
-    query = con.meta.tables["works"].select()
+    query = sql.text(
+        """SELECT title, artists.name as artist, series, imgur_url, source_url
+        FROM works INNER JOIN artists ON artist_id = artists.id"""
+    )
 
     result = con.db.execute(query)
 
@@ -363,7 +366,7 @@ def delete_post(con, id_type, from_reddit, post_id):
 
 
 @cli.command()
-@click.pass_obj()
+@click.pass_obj
 @click.argument("artists", nargs=-1)
 def artists(con, artists):
     if val.url(artists[0]):

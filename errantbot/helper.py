@@ -210,13 +210,16 @@ def post_submissions(con, work_ids=None, submissions=None, do_all=False, last=Fa
     submissions = False if do_all else submissions
 
     query = sql.text(
-        """SELECT title, series, artist, source_url, imgur_url, nsfw,
+        """SELECT title, series, source_url, imgur_url, nsfw,
         source_image_url, custom_tag, submissions.id as submission_id,
-        source_image_urls, subreddit_id, submissions.flair_id, reddit_id
+        source_image_urls, subreddit_id, submissions.flair_id, reddit_id,
+        artists.name as artist
         FROM works
         INNER JOIN submissions
         ON reddit_id IS NULL
-        AND work_id = works.id"""
+        AND work_id = works.id
+        INNER JOIN artists
+        ON artists.id = artist_id"""
         + (" AND works.id = ANY(:work_ids)" if not do_all else "")
         + (
             " INNER JOIN subreddits ON subreddits.name = ANY(:names)"
@@ -344,11 +347,11 @@ def do_artists(con, artists):
         if a_name != artist:
             con.db.execute(a_upsert, name=a_name, alias_of=pa_id)
 
-    return artist
+    return pa_id
 
 
 def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
-    artist = do_artists(artists)
+    artist_id = do_artists(con, artists)
 
     works = con.meta.tables["works"]
 
@@ -357,7 +360,7 @@ def save_work(con, title, series, artists, source_url, nsfw, source_image_url):
     values = {
         "title": title,
         "series": series,
-        "artist": artist,
+        "artist_id": artist_id,
         "source_url": source_url,
         "nsfw": nsfw,
     }
