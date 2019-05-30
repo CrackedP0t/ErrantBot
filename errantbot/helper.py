@@ -94,7 +94,8 @@ def get_last(con, table):
     ).first()["id"]
 
 
-def do_post(con, row):
+def do_post(con, row, wait):
+    wait = timedelta(hours=wait)
     has_keys(
         row,
         (
@@ -125,15 +126,15 @@ def do_post(con, row):
         log.warning("/r/%s is disabled", sr_row["name"])
         return False
 
-    if sr_row["space_out"] and sr_row["last_submission_on"] is not None:
+    if wait and sr_row["space_out"] and sr_row["last_submission_on"] is not None:
         since = datetime.utcnow() - sr_row["last_submission_on"]
-        if since < timedelta(days=1):
-            wait = timedelta(days=1) - since
-            wait = timedelta(wait.days, wait.seconds)
+        if since < wait:
+            until = wait - since
+            until = timedelta(until.days, until.seconds)
             log.warning(
                 "Submitted to /r/%s less than one day ago; you can try again in %s",
                 sr_row["name"],
-                wait,
+                until,
             )
 
             return False
@@ -192,7 +193,9 @@ def do_post(con, row):
         return True
 
 
-def post_submissions(con, work_ids=None, submissions=None, do_all=False, last=False):
+def post_submissions(
+    con, work_ids=None, submissions=None, do_all=False, last=False, wait=18
+):
     if work_ids is None:
         work_ids = []
 
@@ -239,7 +242,7 @@ def post_submissions(con, work_ids=None, submissions=None, do_all=False, last=Fa
         return
 
     for row in rows:
-        do_post(con, row)
+        do_post(con, row, wait)
 
 
 def upload_to_imgur(con, work_ids=[], last=False, do_all=False):
