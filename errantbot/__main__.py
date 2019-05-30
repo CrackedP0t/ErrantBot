@@ -180,7 +180,7 @@ def sr(
 @click.option("--add-sr", "-r", is_flag=True)
 @click.option("--no-post", "-P", is_flag=True)
 @click.option("--wait", "-w", type=int, default=18)
-def crosspost(con, work_id, submissions, no_post, add_sr, wait):
+def xpost(con, work_id, submissions, no_post, add_sr, wait):
     submissions = h.Submissions(submissions)
 
     if add_sr:
@@ -200,7 +200,7 @@ def crosspost(con, work_id, submissions, no_post, add_sr, wait):
 @click.option("--add-sr", "-r", is_flag=True)
 @click.option("--no-post", "-P", is_flag=True)
 @click.option("--wait", "-w", type=int, default=18)
-def crosspost_last(con, submissions, no_post, add_sr, wait):
+def xpost_last(con, submissions, no_post, add_sr, wait):
     submissions = h.Submissions(submissions)
 
     if add_sr:
