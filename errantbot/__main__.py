@@ -52,6 +52,7 @@ def cli(ctx):
 @click.option("--no-post", "-P", is_flag=True)
 @click.option("--add-sr", "-r", is_flag=True)
 @click.option("--username", "-u", is_flag=True)
+@click.option("--wait", "-w", type=int, default=18)
 def add(
     con,
     source_url,
@@ -65,6 +66,7 @@ def add(
     no_post,
     add_sr,
     username,
+    wait,
 ):
     submissions = h.Submissions(submissions)
 
@@ -91,7 +93,7 @@ def add(
         h.upload_to_imgur(con, work_id)
 
         if not no_post:
-            h.post_submissions(con, work_id)
+            h.post_submissions(con, work_id, wait=wait)
 
 
 @cli.command()
@@ -101,10 +103,21 @@ def add(
 @click.argument("source-url", type=types.url, required=True)
 @click.argument("source-image-url", type=types.url, required=True)
 @click.argument("submissions", nargs=-1, type=types.submission)
-@click.option("--series", "-s")
+@click.option("--no-post", "-P", is_flag=True)
 @click.option("--nsfw/--sfw", "-n/-N")
+@click.option("--series", "-s")
+@click.option("--wait", "-w", type=int, default=18)
 def add_custom(
-    con, title, artist, source_url, source_image_url, submissions, series, nsfw
+    con,
+    title,
+    artist,
+    source_url,
+    source_image_url,
+    submissions,
+    no_post,
+    nsfw,
+    series,
+    wait,
 ):
     submissions = h.Submissions(submissions)
 
@@ -116,7 +129,8 @@ def add_custom(
 
     h.upload_to_imgur(con, work_id)
 
-    h.post_submissions(con, work_id)
+    if not no_post:
+        h.post_submissions(con, work_id, wait=wait)
 
 
 @cli.command()
@@ -165,7 +179,8 @@ def sr(
 @click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--add-sr", "-r", is_flag=True)
 @click.option("--no-post", "-P", is_flag=True)
-def crosspost(con, work_id, submissions, no_post, add_sr):
+@click.option("--wait", "-w", type=int, default=18)
+def crosspost(con, work_id, submissions, no_post, add_sr, wait):
     submissions = h.Submissions(submissions)
 
     if add_sr:
@@ -176,7 +191,7 @@ def crosspost(con, work_id, submissions, no_post, add_sr):
     h.add_submissions(con, work_id, submissions)
 
     if not no_post:
-        h.post_submissions(con, work_id, submissions)
+        h.post_submissions(con, work_id, submissions, wait=wait)
 
 
 @cli.command()
@@ -184,7 +199,8 @@ def crosspost(con, work_id, submissions, no_post, add_sr):
 @click.argument("submissions", nargs=-1, type=types.submission)
 @click.option("--add-sr", "-r", is_flag=True)
 @click.option("--no-post", "-P", is_flag=True)
-def crosspost_last(con, submissions, no_post, add_sr):
+@click.option("--wait", "-w", type=int, default=18)
+def crosspost_last(con, submissions, no_post, add_sr, wait):
     submissions = h.Submissions(submissions)
 
     if add_sr:
@@ -197,26 +213,28 @@ def crosspost_last(con, submissions, no_post, add_sr):
     h.add_submissions(con, work_id, submissions)
 
     if not no_post:
-        h.post_submissions(con, work_id, submissions)
+        h.post_submissions(con, work_id, submissions, wait=wait)
 
 
 @cli.command()
 @click.pass_obj
 @click.argument("work-ids", type=int, nargs=-1)
 @click.option("--last", "-l", is_flag=True)
-def retry(con, work_ids, last):
-    h.post_submissions(con, work_ids, last=last)
+@click.option("--wait", "-w", type=int, default=18)
+def retry(con, work_ids, last, wait):
+    h.post_submissions(con, work_ids, last=last, wait=wait)
 
 
 @cli.command()
 @click.pass_obj
-def retry_all(con):
-    h.post_submissions(con, do_all=True)
+@click.option("--wait", "-w", type=int, default=18)
+def retry_all(con, wait):
+    h.post_submissions(con, do_all=True, wait=wait)
 
 
 @cli.command()
 @click.pass_obj
-def retry_all_uploads(con):
+def retry_all_uploads(con, no_wait):
     h.upload_to_imgur(con, do_all=True)
 
 
