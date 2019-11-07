@@ -4,8 +4,9 @@ from urllib.parse import parse_qs, quote, urlparse
 import click
 import regex
 import requests
-import tldextract
 from bs4 import BeautifulSoup
+
+import tldextract
 
 from . import exceptions as exc
 from . import helper as h
@@ -52,9 +53,8 @@ def pixiv(page_url, options):
     from pixivpy3 import AppPixivAPI
 
     parsed = urlparse(page_url)
-    query = parse_qs(parsed.query)
 
-    id = int(query["illust_id"][0])
+    id = int(parsed.path.split("/")[-1])
 
     api = AppPixivAPI()
 

@@ -3,8 +3,9 @@ import logging
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-import praw
 import tomlkit
+
+import praw
 from prawcore import exceptions
 from psycopg2 import errorcodes
 from sqlalchemy import MetaData, create_engine, exc, sql
@@ -88,7 +89,6 @@ class Connections:
 
 
 def get_last(con, table):
-
     return con.db.execute(
         con.meta.tables[table].select().order_by(sql.desc("id")).limit(1)
     ).first()["id"]
@@ -155,9 +155,18 @@ def do_post(con, row, wait):
     url = row["imgur_url"]
 
     try:
-        submission = sub.submit(
-            title, url=url, flair_id=row["flair_id"] or sr_row["flair_id"]
-        )
+        xpost_id = row["crosspost_id"]
+        if xpost_id:
+            orig = con.reddit.submission(id=xpost_id)
+            submission = orig.crosspost(
+                sr_row["name"],
+                title=title,
+                flair_id=row["flair_id"] or sr_row["flair_id"],
+            )
+        else:
+            submission = sub.submit(
+                title, url=url, flair_id=row["flair_id"] or sr_row["flair_id"]
+            )
     except praw.exceptions.APIException as e:
         log.warning(
             "Couldn't submit to /r/%s - got error %s: '%s'",
@@ -213,22 +222,31 @@ def post_submissions(
     submissions = False if do_all else submissions
 
     query = sql.text(
-        """SELECT title, series, source_url, imgur_url, nsfw,
-        source_image_url, custom_tag, submissions.id as submission_id,
+        """SELECT DISTINCT ON (works.id) title, series, source_url, imgur_url, nsfw,
+        source_image_url, custom_tag, submissions.id AS submission_id,
         source_image_urls, subreddit_id, submissions.flair_id, reddit_id,
-        artists.name as artist
+        artists.name AS artist, subreddits.name,
+        (SELECT reddit_id FROM subreddits AS subreddits_xpost
+            INNER JOIN submissions AS submissions_xpost
+            ON submissions.work_id = submissions_xpost.work_id
+            AND submissions_xpost.subreddit_id = subreddits_xpost.id
+            AND subreddits_xpost.crosspost_from) AS crosspost_id
         FROM works
         INNER JOIN submissions
         ON reddit_id IS NULL
         AND work_id = works.id
         INNER JOIN artists
-        ON artists.id = artist_id"""
+        ON artists.id = artist_id
+        INNER JOIN subreddits ON
+        subreddits.id = subreddit_id
+        AND NOT disabled
+        AND NOT (space_out AND last_submission_on > NOW() - INTERVAL '18 hours')
+        AND NOT EXISTS(SELECT FROM submissions AS submissions2 INNER JOIN subreddits ON work_id = works.id
+            AND submissions.id != submissions2.id
+            AND subreddits.id = submissions2.subreddit_id
+            AND crosspost_from AND submissions2.reddit_id IS NULL)"""
         + (" AND works.id = ANY(:work_ids)" if not do_all else "")
-        + (
-            " INNER JOIN subreddits ON subreddits.name = ANY(:names)"
-            if submissions
-            else ""
-        )
+        + (""" AND subreddits.name = ANY(:names)""" if submissions else "")
     )
 
     rows = con.db.execute(
