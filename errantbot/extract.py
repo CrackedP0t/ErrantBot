@@ -4,9 +4,9 @@ from urllib.parse import parse_qs, quote, urlparse
 import click
 import regex
 import requests
-from bs4 import BeautifulSoup
 
 import tldextract
+from bs4 import BeautifulSoup
 
 from . import exceptions as exc
 from . import helper as h

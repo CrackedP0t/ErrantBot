@@ -240,7 +240,6 @@ def post_submissions(
         INNER JOIN subreddits ON
         subreddits.id = subreddit_id
         AND NOT disabled
-        AND NOT (space_out AND last_submission_on > NOW() - INTERVAL '18 hours')
         AND NOT EXISTS(SELECT FROM submissions AS submissions2 INNER JOIN subreddits ON work_id = works.id
             AND submissions.id != submissions2.id
             AND subreddits.id = submissions2.subreddit_id
